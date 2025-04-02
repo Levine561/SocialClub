@@ -79,7 +79,7 @@ struct ExploreView: View {
                             Image(systemName: "person.crop.circle.fill")
                                 .resizable()
                                 .scaledToFill()
-                                .frame(width: 60, height: 60)
+                                .frame(width: 70, height: 60)
                                 .foregroundColor(.secondary)
                         }
                     }
