@@ -107,7 +107,7 @@ struct SignUpView: View {
                         Text("Already have an account?")
                             .foregroundColor(.gray)
                         
-                        NavigationLink(destination: LoginView()) {
+                        NavigationLink(destination: LoginView().navigationBarBackButtonHidden(true)) {
                             Text("Login")
                                 .foregroundColor(Color(red: 17/255.0, green: 80/255.0, blue: 95/255.0))
                                 .fontWeight(.semibold)
@@ -120,7 +120,7 @@ struct SignUpView: View {
                 
                 // Hidden NavigationLink triggered by navigateToBasicInfo
                 NavigationLink(
-                    destination: BasicInfoView(),
+                    destination: BasicInfoView().navigationBarBackButtonHidden(true),
                     isActive: $navigateToBasicInfo
                 ) {
                     EmptyView()

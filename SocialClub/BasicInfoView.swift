@@ -20,6 +20,7 @@ struct BasicInfoView: View {
     @State private var showingAlert: Bool = false
     @State private var keyboardHeight: CGFloat = 0
     @State private var navigateToInterests: Bool = false
+    @State private var progress: Double = 0.0
     @FocusState private var nameFieldIsFocused: Bool
     @FocusState private var dobFieldIsFocused: Bool
 
@@ -29,11 +30,17 @@ struct BasicInfoView: View {
             ScrollView {
                 VStack(spacing: 20) {
 
+                    ProgressView(value: progress, total: 1.0)
+                        .tint(Color(red: 17/255.0, green: 80/255.0, blue: 95/255.0))
+                        .progressViewStyle(LinearProgressViewStyle())
+                        .padding(.horizontal)
+                        .padding(.top, 24)
+
                     // Title
-                    Text("Tell us about you")
+                    Text("Tell Us About You")
                         .font(.title2)
                         .fontWeight(.semibold)
-                        .padding(.top, 40)
+                        .padding(.top, 4)
 
                     // Name Field
                     VStack(alignment: .leading, spacing: 12) {
@@ -136,7 +143,12 @@ struct BasicInfoView: View {
                       message: Text(errorMessage),
                       dismissButton: .default(Text("OK")))
             }
-            .onAppear { subscribeToKeyboardEvents() }
+            .onAppear {
+                subscribeToKeyboardEvents()
+                withAnimation(.linear(duration: 1.0)) {
+                    progress = 0.2
+                }
+            }
             .onDisappear { NotificationCenter.default.removeObserver(self) }
             // Dismiss keyboard when tapping outside inputs
             .contentShape(Rectangle())
@@ -146,7 +158,7 @@ struct BasicInfoView: View {
                 dobFieldIsFocused = false
             }
 
-            NavigationLink(destination: InterestsView(), isActive: $navigateToInterests) {
+            NavigationLink(destination: InterestsView().navigationBarBackButtonHidden(true), isActive: $navigateToInterests) {
                 EmptyView()
             }
         }
@@ -213,22 +225,35 @@ struct BasicInfoView: View {
             return
         }
 
-        let db = Firestore.firestore()
-        let userInfo: [String: Any] = [
-            "name": name,
-            "dateOfBirth": dateOfBirth,
-            "gender": gender,
-            "timestamp": FieldValue.serverTimestamp()
-        ]
-
-        db.collection("users").document(user.uid).setData(userInfo) { err in
-            if let err = err {
-                errorMessage = "Error saving information: \(err.localizedDescription)"
+        // Update the Firebase Auth user's displayName
+        let changeRequest = user.createProfileChangeRequest()
+        changeRequest.displayName = name
+        changeRequest.commitChanges { error in
+            if let error = error {
+                errorMessage = "Error updating profile: \(error.localizedDescription)"
                 showingAlert = true
-            } else {
-                // Navigate to next screen if desired
-                DispatchQueue.main.async {
-                    navigateToInterests = true
+                return
+            }
+
+            // After successful profile update, save the name to Firestore
+            let db = Firestore.firestore()
+            let userInfo: [String: Any] = [
+                "name": name,
+                "timestamp": FieldValue.serverTimestamp()
+            ]
+
+            db.collection("users").document(user.uid).setData(userInfo) { err in
+                if let err = err {
+                    errorMessage = "Error saving information: \(err.localizedDescription)"
+                    showingAlert = true
+                } else {
+                    // Save gender and dateOfBirth locally
+                    UserDefaults.standard.set(gender, forKey: "gender")
+                    UserDefaults.standard.set(dateOfBirth, forKey: "dateOfBirth")
+                    // Navigate to next screen if desired
+                    DispatchQueue.main.async {
+                        navigateToInterests = true
+                    }
                 }
             }
         }

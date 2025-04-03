@@ -1,13 +1,12 @@
 import SwiftUI
+import UIKit
 import AVFoundation
 
 struct CameraView: View {
     @Environment(\.dismiss) var dismiss
     @StateObject var camera = CameraModel()
     @State private var showExploreView: Bool = false
-    @State private var isRecording: Bool = false
-    @State private var recordingProgress: CGFloat = 0.0
-    @State private var recordingTimer: Timer? = nil
+    @State private var showPhotoConfirmation: Bool = false
     
     var body: some View {
         ZStack {
@@ -21,45 +20,11 @@ struct CameraView: View {
                 HStack {
                     Spacer()
                     Circle()
-                        .fill(isRecording ? Color.red : Color.clear)
-                        .overlay(
-                            Circle()
-                                .strokeBorder(Color.white, lineWidth: 4)
-                        )
+                        .stroke(Color.white, lineWidth: 4)
                         .frame(width: 90, height: 90)
-                        .overlay(
-                            Circle()
-                                .trim(from: 0, to: recordingProgress)
-                                .stroke(Color.red, lineWidth: 4)
-                                .rotationEffect(.degrees(-90))
-                        )
-                        .gesture(
-                            LongPressGesture(minimumDuration: 0.1)
-                                .onChanged { _ in
-                                    if !isRecording {
-                                        isRecording = true
-                                        recordingProgress = 0.0
-                                        camera.startRecording()
-                                        recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { timer in
-                                            recordingProgress += 0.01
-                                            if recordingProgress >= 1.0 {
-                                                isRecording = false
-                                                recordingTimer?.invalidate()
-                                                recordingTimer = nil
-                                                camera.stopRecording()
-                                            }
-                                        }
-                                    }
-                                }
-                                .onEnded { _ in
-                                    if isRecording {
-                                        isRecording = false
-                                        recordingTimer?.invalidate()
-                                        recordingTimer = nil
-                                        camera.stopRecording()
-                                    }
-                                }
-                        )
+                        .onTapGesture {
+                            camera.takePhoto()
+                        }
                     Spacer()
                 }
                 .padding(.bottom, 40)
@@ -119,6 +84,17 @@ struct CameraView: View {
             .padding(.top, 8)
             .offset(x: -10, y: 0)
         }
+        .onChange(of: camera.capturedMediaURL) { newValue in
+            if newValue != nil {
+                showPhotoConfirmation = true
+            }
+        }
+        .fullScreenCover(isPresented: $showPhotoConfirmation, onDismiss: {
+            // Optionally, reset the captured media after dismissal
+            camera.capturedMediaURL = nil
+        }) {
+            PhotoConfirmationView(mediaURL: camera.capturedMediaURL!)
+        }
         .onAppear {
             camera.checkPermissions()
             camera.configure()
@@ -147,6 +123,7 @@ class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
     var currentCameraPosition: AVCaptureDevice.Position = .back
     @Published var session = AVCaptureSession()
     @Published var output = AVCapturePhotoOutput()
+    @Published var capturedMediaURL: URL? = nil
     lazy var previewLayer: AVCaptureVideoPreviewLayer = {
         let layer = AVCaptureVideoPreviewLayer(session: session)
         layer.videoGravity = .resizeAspectFill
@@ -195,7 +172,9 @@ class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
     }
     
     func takePhoto() {
+        print("Take photo button pressed")
         let settings = AVCapturePhotoSettings()
+        settings.isHighResolutionPhotoEnabled = true
         settings.flashMode = flashEnabled ? .on : .off
         output.capturePhoto(with: settings, delegate: self)
     }
@@ -226,20 +205,28 @@ class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
         print("Camera flipped to \(currentCameraPosition == .back ? "Back" : "Front")")
     }
     
-    func startRecording() {
-        // Start recording video (this is a stub for actual recording functionality)
-        print("Recording started")
-    }
-    
-    func stopRecording() {
-        // Stop recording video (this is a stub for actual recording functionality)
-        print("Recording stopped")
-    }
-    
     func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-        guard let data = photo.fileDataRepresentation() else { return }
-        // Process photo data here (e.g., save to library or display the image)
-        print("Photo captured: \(data.count) bytes")
+        if let error = error {
+            print("Error capturing photo: \(error)")
+            return
+        }
+        print("photoOutput delegate method called")
+        guard let data = photo.fileDataRepresentation() else {
+            print("Failed to get photo data")
+            return
+        }
+        if let image = UIImage(data: data), let jpegData = image.jpegData(compressionQuality: 1.0) {
+            let fileURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("capturedPhoto.jpg")
+            do {
+                try jpegData.write(to: fileURL)
+                DispatchQueue.main.async {
+                    self.capturedMediaURL = fileURL
+                }
+                print("Photo captured and saved to \(fileURL)")
+            } catch {
+                print("Error saving photo: \(error)")
+            }
+        }
     }
 }
 

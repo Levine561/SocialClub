@@ -1,5 +1,7 @@
 import SwiftUI
 import FirebaseStorage
+import FirebaseAuth
+import FirebaseFirestore
 
 struct ProfilePictureView: View {
     var username: String = ""
@@ -7,15 +9,23 @@ struct ProfilePictureView: View {
     @State private var errorMessage: String?
     @State private var isUploading: Bool = false
     @State private var isShowingImagePicker: Bool = false
+    @State private var progress: Double = 0.6
+    @State private var navigateToWelcome: Bool = false
 
     var body: some View {
         NavigationView {
             VStack(spacing: 24) {
+                ProgressView(value: progress, total: 1.0)
+                    .tint(Color(red: 17/255.0, green: 80/255.0, blue: 95/255.0))
+                    .progressViewStyle(LinearProgressViewStyle())
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 24)
+
                 Text("Add a Profile Picture")
                     .font(.title2)
                     .fontWeight(.semibold)
                 
-                Text("Username: \(username)")
+                Text(username)
                     .font(.subheadline)
                     .foregroundColor(.gray)
                 
@@ -80,11 +90,22 @@ struct ProfilePictureView: View {
                 .disabled(selectedImage == nil || isUploading)
                 
                 Spacer()
+                
+                NavigationLink(
+                    destination: WelcomeView().navigationBarBackButtonHidden(true),
+                    isActive: $navigateToWelcome,
+                    label: { EmptyView() }
+                ).hidden()
             }
-            .padding()
+            .padding([.horizontal, .bottom])
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $isShowingImagePicker) {
                 ImagePicker(image: $selectedImage)
+            }
+            .onAppear {
+                withAnimation(.linear(duration: 1.0)) {
+                    progress = 0.8
+                }
             }
         }
     }
@@ -114,7 +135,23 @@ struct ProfilePictureView: View {
                 }
                 if let url = url {
                     print("Profile picture URL: \(url.absoluteString)")
-                    // Proceed to update the user's profile in Firestore or navigate to the next screen.
+                    // Update the user's profile in Firestore with the new profile picture URL.
+                    if let currentUser = Auth.auth().currentUser {
+                        let db = Firestore.firestore()
+                        db.collection("users").document(currentUser.uid).updateData([
+                            "profilePictureURL": url.absoluteString
+                        ]) { error in
+                            if let error = error {
+                                errorMessage = "Firestore update error: \(error.localizedDescription)"
+                            } else {
+                                print("User profile picture updated successfully.")
+                                navigateToWelcome = true
+                                // Optionally, navigate to the next screen or perform other actions.
+                            }
+                        }
+                    } else {
+                        errorMessage = "No authenticated user found."
+                    }
                 }
             }
         }

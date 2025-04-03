@@ -40,149 +40,169 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
 
 struct ExploreView: View {
     @State private var region = MKCoordinateRegion(
-        center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194), // Example: San Francisco
+        center: CLLocationCoordinate2D(latitude: 0.0, longitude: 0.0), // Placeholder; will update to user's location automatically
         span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
     )
     @StateObject private var locationManager = LocationManager()
     @State private var profileImage: UIImage? = nil
     @State private var showLocationModal: Bool = true
     @State private var showCameraView = false
+    @State private var resetCamera: Bool = false
 
     var body: some View {
-        ZStack(alignment: .top) {
-            // 3D Map (simplified)
-            ThreeDMapView(region: $region)
-                .edgesIgnoringSafeArea(.all)
-
-            // Profile image and search/location container (moved from overlay)
-            HStack(alignment: .top) {
-                // Profile image on the top left as button
-                if let profileImage = profileImage {
-                    Button(action: {
-                        // Profile tapped action
-                    }) {
-                        Image(uiImage: profileImage)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 64, height: 64)
-                            .clipShape(Circle())
-                    }
-                    .buttonStyle(PressableButtonStyle())
-                } else {
-                    Button(action: {
-                        // Profile tapped action
-                    }) {
-                        ZStack {
-                            Circle()
-                                .fill(.regularMaterial)
-                                .frame(width: 64, height: 64)
-                            Image(systemName: "person.crop.circle.fill")
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 60, height: 60)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    .buttonStyle(PressableButtonStyle())
+        Group {
+            if locationManager.currentLocation == nil {
+                // Show a loading indicator while waiting for location
+                VStack {
+                    Spacer()
+                    ProgressView("Getting current location...")
+                        .progressViewStyle(CircularProgressViewStyle())
+                    Spacer()
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.adaptiveBackground)
+            } else {
+                // Once location is available, update region and show the map and UI
+                ZStack(alignment: .top) {
+                    // 3D Map (simplified)
+                    ThreeDMapView(region: $region, resetCamera: $resetCamera)
+                        .edgesIgnoringSafeArea(.all)
 
-                Spacer()
-                VStack(spacing: 8) {
-                    // Search and location container
-                    VStack(spacing: 8) {
-                        Button(action: {
-                            // Search action
-                        }) {
-                            Image(systemName: "magnifyingglass")
-                                .font(.title2)
-                                .frame(width: 50, height: 50)
-                        }
-                        .buttonStyle(PressableButtonStyle())
-                        
-                        Divider()
-                            .frame(width: 40)
-                            .background(Color.primary)
-                            .padding(.vertical, 0)
-                        
-                        Button(action: {
-                            // Reset the region to the user's current location when tapped
-                            if let location = locationManager.currentLocation {
-                                region.center = location.coordinate
+                    // Profile image and search/location container (moved from overlay)
+                    HStack(alignment: .top) {
+                        // Profile image on the top left as button
+                        if let profileImage = profileImage {
+                            Button(action: {
+                                // Profile tapped action
+                            }) {
+                                Image(uiImage: profileImage)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 56, height: 56)
+                                    .clipShape(Circle())
                             }
-                        }) {
-                        Image(systemName: "location")
-                                .font(.title2)
-                                .frame(width: 50, height: 50)
+                            .buttonStyle(PressableButtonStyle())
+                        } else {
+                            Button(action: {
+                                // Profile tapped action
+                            }) {
+                                ZStack {
+                                    Circle()
+                                        .fill(.regularMaterial)
+                                        .frame(width: 56, height: 56)
+                                    Image(systemName: "person.crop.circle.fill")
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 52, height: 52)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .buttonStyle(PressableButtonStyle())
                         }
-                        .buttonStyle(PressableButtonStyle())
+
+                        Spacer()
+                        VStack(spacing: 8) {
+                            // Search and location container
+                            VStack(spacing: 8) {
+                                Button(action: {
+                                    // Search action
+                                }) {
+                                    Image(systemName: "magnifyingglass")
+                                        .font(.title2)
+                                        .frame(width: 45, height: 45)
+                                }
+                                .buttonStyle(PressableButtonStyle())
+
+                                Divider()
+                                    .frame(width: 40)
+                                    .background(Color.primary)
+                                    .padding(.vertical, 0)
+
+                                Button(action: {
+                                    if let location = locationManager.currentLocation {
+                                        region.center = location.coordinate
+                                        resetCamera = true
+                                    }
+                                }) {
+                                    Image(systemName: "location")
+                                        .font(.title2)
+                                        .frame(width: 45, height: 45)
+                                }
+                                .buttonStyle(PressableButtonStyle())
+                            }
+                            .padding(0)
+                            .background(RoundedRectangle(cornerRadius: 8).fill(.regularMaterial))
+
+                            // Camera button in a circle container
+                            Button(action: {
+                                showCameraView = true
+                            }) {
+                                Image(systemName: "camera")
+                                    .font(.title2)
+                                    .frame(width: 45, height: 45)
+                                    .background(Circle().fill(.regularMaterial))
+                            }
+                            .buttonStyle(PressableButtonStyle())
+                        }
                     }
-                    .padding(0)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(.regularMaterial))
-                    
-                    // Camera button in a circle container
-                    Button(action: {
-                        showCameraView = true
-                    }) {
-                        Image(systemName: "camera")
-                            .font(.title2)
-                            .frame(width: 50, height: 50)
-                            .background(Circle().fill(.regularMaterial))
+                    .padding()
+                    .offset(y: -20)
+                    .zIndex(0)
+
+                    // Pull-up bottom sheet
+                    BottomSheetView {
+                        VStack(alignment: .leading, spacing: 24) {
+                            // Sights
+                            SectionView(
+                                title: "Sights",
+                                subtitle: "See what's happening near you",
+                                placeholders: 5
+                            )
+
+                            // Hotspots
+                            SectionView(
+                                title: "Hotspots",
+                                subtitle: "Explore your area",
+                                placeholders: 5
+                            )
+
+                            // Clubs
+                            SectionView(
+                                title: "Clubs",
+                                subtitle: "Chat with your community",
+                                placeholders: 5
+                            )
+
+                            // Bottom label
+                            HStack {
+                                Spacer()
+                                Text("Keep exploring!")
+                                    .foregroundColor(.primary)
+                                Spacer()
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        .padding(.horizontal)
+                        .padding(.top, 8)
                     }
-                    .buttonStyle(PressableButtonStyle())
+                    .zIndex(1)
+                }
+                .onReceive(locationManager.$currentLocation) { location in
+                    if let location = location {
+                        // Check if the region is still at the placeholder (0.0, 0.0)
+                        if region.center.latitude == 0.0 && region.center.longitude == 0.0 {
+                            region.center = location.coordinate
+                            resetCamera = true
+                        }
+                    }
+                }
+                .onAppear {
+                    // Additional onAppear actions if needed
+                }
+                .fullScreenCover(isPresented: $showCameraView) {
+                    CameraView()
                 }
             }
-            .padding()
-            .offset(y: -20)
-            .zIndex(0)
-
-            // Pull-up bottom sheet
-            BottomSheetView {
-                VStack(alignment: .leading, spacing: 24) {
-                    // Sights
-                    SectionView(
-                        title: "Sights",
-                        subtitle: "See whats happening near you",
-                        placeholders: 5
-                    )
-
-                    // Hotspots
-                    SectionView(
-                        title: "Hotspots",
-                        subtitle: "Attend events and activities",
-                        placeholders: 5
-                    )
-
-                    // Communities
-                    SectionView(
-                        title: "Communities",
-                        subtitle: "Join clubs and meet new people",
-                        placeholders: 5
-                    )
-
-                    // Bottom label
-                    HStack {
-                        Spacer()
-                        Text("Keep exploring!")
-                            .foregroundColor(.primary)
-                        Spacer()
-                    }
-                    .padding(.vertical, 4)
-                }
-                .padding(.horizontal)
-                .padding(.top, 8)
-            }
-            .zIndex(1)
-        }
-        .onReceive(locationManager.$currentLocation) { location in
-            if let location = location {
-                region.center = location.coordinate
-            }
-        }
-        .onAppear {
-            // Additional onAppear actions if needed
-        }
-        .fullScreenCover(isPresented: $showCameraView) {
-            CameraView()
         }
     }
 }
@@ -203,7 +223,7 @@ struct SectionView: View {
 
     // Dropdown
     @State private var selectedOption = "Hottest"
-    let menuOptions = ["Hottest", "Newest", "Nearest"]
+    let menuOptions = ["Hottest", "For You", "Newest"]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -260,6 +280,7 @@ struct SectionView: View {
 /// A minimal UIViewRepresentable that displays a standard MKMapView
 struct ThreeDMapView: UIViewRepresentable {
     @Binding var region: MKCoordinateRegion
+    @Binding var resetCamera: Bool
 
     func makeUIView(context: Context) -> MKMapView {
         let mapView = MKMapView(frame: .zero)
@@ -267,20 +288,26 @@ struct ThreeDMapView: UIViewRepresentable {
         mapView.showsBuildings = true
         mapView.isScrollEnabled = true    // Enables panning
         mapView.isRotateEnabled = true    // Allow rotation
-        mapView.isPitchEnabled = false     // Locks the camera pitch
+        mapView.isPitchEnabled = true     // Locks the camera pitch
         
-        
+        let computedAltitude = max(500, min(2000, region.span.latitudeDelta * 111000))
+        let camera = MKMapCamera(lookingAtCenter: region.center, fromDistance: computedAltitude, pitch: 60, heading: 0)
+        mapView.setCamera(camera, animated: false)
+
         return mapView
     }
 
     func updateUIView(_ uiView: MKMapView, context: Context) {
-        // Compute an altitude based on the region's span (rough conversion: 1 degree ~ 111,000 meters)
-        let computedAltitude = max(500, min(2000, region.span.latitudeDelta * 111000))
-        
-        // Lock the camera with a fixed pitch (for 3D view) and heading
-        let currentHeading = uiView.camera.heading
-        let camera = MKMapCamera(lookingAtCenter: region.center, fromDistance: computedAltitude, pitch: 60, heading: currentHeading)
-        uiView.setCamera(camera, animated: true)
+        if resetCamera {
+            let computedAltitude = max(500, min(2000, region.span.latitudeDelta * 111000))
+            // Use the current heading or a default value
+            let currentHeading = uiView.camera.heading
+            let camera = MKMapCamera(lookingAtCenter: region.center, fromDistance: computedAltitude, pitch: 60, heading: currentHeading)
+            uiView.setCamera(camera, animated: true)
+            DispatchQueue.main.async {
+                self.resetCamera = false
+            }
+        }
     }
 }
 

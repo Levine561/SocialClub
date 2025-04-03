@@ -49,6 +49,8 @@ struct InterestsView: View {
     @State private var shouldNavigate = false
     // Controls navigation to the Basics Info page
     @State private var goToBasicsInfo = false
+    // Progress state variable
+    @State private var progress: Double = 0.2
     
     // Access to presentationMode (if needed)
     @Environment(\.presentationMode) var presentationMode
@@ -72,14 +74,20 @@ struct InterestsView: View {
     var body: some View {
         NavigationView {
             VStack(alignment: .leading, spacing: 0) {
+                ProgressView(value: progress, total: 1.0)
+                    .tint(Color(red: 17/255.0, green: 80/255.0, blue: 95/255.0))
+                    .progressViewStyle(LinearProgressViewStyle())
+                    .padding(.horizontal)
+                    .padding(.top, 24)
+
                 // Title
-                Text("What interests you?")
+                Text("What Interests You?")
                     .font(.title2)
                     .fontWeight(.semibold)
                     .frame(maxWidth: .infinity)
                     .multilineTextAlignment(.center)
-                    .padding(.top, 16)
                     .padding(.horizontal, 16)
+                    .padding(.top, 24)
                 
                 // Subtitle
                 Text("Select at least 5 of your interests.")
@@ -145,6 +153,7 @@ struct InterestsView: View {
                 
                 // Continue Button
                 Button(action: {
+                    UserDefaults.standard.set(Array(selectedInterests), forKey: "selectedInterests")
                     shouldNavigate = true
                 }) {
                     Text("Continue")
@@ -161,14 +170,18 @@ struct InterestsView: View {
                 .opacity(selectedInterests.count < 5 ? 0.5 : 1.0)
                 
                 // NavigationLink to UsernameView
-                NavigationLink(destination: UsernameView(), isActive: $shouldNavigate) {
+                NavigationLink(destination: UsernameView().navigationBarBackButtonHidden(true), isActive: $shouldNavigate) {
                     EmptyView()
                 }
                 .hidden()
                 
             }
-            .padding(.top, 24)
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                withAnimation(.linear(duration: 1.0)) {
+                    progress = 0.4
+                }
+            }
         }
     }
     

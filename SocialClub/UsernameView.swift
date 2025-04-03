@@ -1,5 +1,6 @@
 import SwiftUI
 import FirebaseFirestore
+import FirebaseAuth
 
 struct UsernameView: View {
     @State private var username: String = ""
@@ -7,14 +8,21 @@ struct UsernameView: View {
     @State private var isUsernameAvailable: Bool?
     @State private var isChecking: Bool = false
     @State private var shouldNavigate = false
+    @State private var progress: Double = 0.4
     
     // Reference to your Firestore database
     private let db = Firestore.firestore()
     
     var body: some View {
         NavigationView {
-            VStack(spacing: 24) {
-                Text("Create a username")
+            VStack(spacing: 20) {
+                ProgressView(value: progress, total: 1.0)
+                    .tint(Color(red: 17/255.0, green: 80/255.0, blue: 95/255.0))
+                    .progressViewStyle(LinearProgressViewStyle())
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 12)
+                
+                Text("Create a Username")
                     .font(.title2)
                     .fontWeight(.semibold)
                 
@@ -58,7 +66,7 @@ struct UsernameView: View {
                 }
                 .disabled(username.trimmingCharacters(in: .whitespaces).isEmpty || isChecking || isUsernameAvailable != true)
                 
-                NavigationLink(destination: ProfilePictureView(), isActive: $shouldNavigate) {
+                NavigationLink(destination: ProfilePictureView().navigationBarBackButtonHidden(true), isActive: $shouldNavigate) {
                     EmptyView()
                 }
                 .hidden()
@@ -66,6 +74,11 @@ struct UsernameView: View {
                 Spacer()
             }
             .padding()
+            .onAppear {
+                withAnimation(.linear(duration: 1.0)) {
+                    progress = 0.6
+                }
+            }
             .navigationBarTitleDisplayMode(.inline)
         }
     }
@@ -106,7 +119,19 @@ struct UsernameView: View {
     }
     
     private func continueAction() {
-        shouldNavigate = true
+        let trimmedUsername = username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard isUsernameAvailable == true, let user = Auth.auth().currentUser else {
+            return
+        }
+        
+        // Update the user's document with the chosen username
+        db.collection("users").document(user.uid).setData(["username": trimmedUsername], merge: true) { error in
+            if let error = error {
+                errorMessage = "Error updating username: \(error.localizedDescription)"
+            } else {
+                shouldNavigate = true
+            }
+        }
     }
 }
 
