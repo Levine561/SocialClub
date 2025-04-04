@@ -4,7 +4,6 @@ import FirebaseAuth
 import FirebaseFirestore
 
 struct ProfilePictureView: View {
-    var username: String = ""
     @State private var selectedImage: UIImage?
     @State private var errorMessage: String?
     @State private var isUploading: Bool = false
@@ -16,51 +15,48 @@ struct ProfilePictureView: View {
         NavigationView {
             VStack(spacing: 24) {
                 ProgressView(value: progress, total: 1.0)
-                    .tint(Color(red: 17/255.0, green: 80/255.0, blue: 95/255.0))
+                    .tint(Color(red: 135/255.0, green: 173/255.0, blue: 255/255.0))
                     .progressViewStyle(LinearProgressViewStyle())
                     .frame(maxWidth: .infinity)
                     .padding(.top, 24)
 
-                Text("Add a Profile Picture")
+                Text("Add a profile picture")
                     .font(.title2)
                     .fontWeight(.semibold)
                 
-                Text(username)
-                    .font(.subheadline)
-                    .foregroundColor(.gray)
-                
-                // Display selected image or a placeholder circle.
-                if let selectedImage = selectedImage {
-                    Image(uiImage: selectedImage)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 150, height: 150)
-                        .clipShape(Circle())
-                        .shadow(radius: 10)
-                } else {
-                    Circle()
-                        .fill(Color(UIColor.secondarySystemBackground))
-                        .frame(width: 150, height: 150)
-                        .overlay(
-                            Image(systemName: "person.crop.circle.fill.badge.plus")
-                                .font(.system(size: 50))
-                                .foregroundColor(.gray)
-                        )
-                }
-                
-                // Button to show the image picker.
-                Button(action: {
-                    isShowingImagePicker = true
-                }) {
-                    Text("Choose Photo")
-                        .fontWeight(.semibold)
-                        .foregroundColor(Color(red: 17/255.0, green: 80/255.0, blue: 95/255.0))
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color(red: 17/255.0, green: 80/255.0, blue: 95/255.0), lineWidth: 2)
-                        )
+                VStack(spacing: 12) {
+                    // Display selected image or a placeholder circle, both tappable to open the camera roll.
+                    Button(action: {
+                        isShowingImagePicker = true
+                    }) {
+                        if let selectedImage = selectedImage {
+                            Image(uiImage: selectedImage)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 200, height: 200)
+                                .clipShape(Circle())
+                        } else {
+                            Circle()
+                                .fill(Color(UIColor.secondarySystemBackground))
+                                .frame(width: 200, height: 200)
+                                .overlay(
+                                    Image(systemName: "person.crop.circle.fill.badge.plus")
+                                        .font(.system(size: 70))
+                                        .foregroundColor(.gray)
+                                )
+                        }
+                    }
+
+                    // Tertiary button for choosing photo.
+                    Button(action: {
+                        isShowingImagePicker = true
+                    }) {
+                        Text("Select photo")
+                            .font(.subheadline)
+                            .foregroundColor(Color(red: 255/255.0, green: 49/255.0, blue: 95/255.0))
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 16)
+                    }
                 }
                 
                 // Display error messages if any.
@@ -70,6 +66,8 @@ struct ProfilePictureView: View {
                         .font(.footnote)
                 }
                 
+                Spacer()
+                
                 // Continue button to upload the selected image.
                 Button(action: {
                     uploadProfilePicture()
@@ -77,19 +75,17 @@ struct ProfilePictureView: View {
                     if isUploading {
                         ProgressView()
                     } else {
+                        let isDisabled = selectedImage == nil || isUploading
                         Text("Continue")
                             .fontWeight(.semibold)
-                            .foregroundColor(.white)
+                            .foregroundColor(isDisabled ? Color(red: 142/255.0, green: 142/255.0, blue: 147/255.0) : Color(red: 255/255.0, green: 255/255.0, blue: 255/255.0))
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(Color(red: 17/255.0, green: 80/255.0, blue: 95/255.0))
+                            .background(isDisabled ? Color(red: 236/255.0, green: 236/255.0, blue: 236/255.0) : Color(red: 255/255.0, green: 49/255.0, blue: 95/255.0))
                             .cornerRadius(8)
-                            .opacity(selectedImage == nil || isUploading ? 0.5 : 1.0)
                     }
                 }
                 .disabled(selectedImage == nil || isUploading)
-                
-                Spacer()
                 
                 NavigationLink(
                     destination: WelcomeView().navigationBarBackButtonHidden(true),
@@ -97,15 +93,14 @@ struct ProfilePictureView: View {
                     label: { EmptyView() }
                 ).hidden()
             }
-            .padding([.horizontal, .bottom])
+            .padding(.horizontal, 16)
+            .padding(.bottom, 16)
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $isShowingImagePicker) {
                 ImagePicker(image: $selectedImage)
             }
             .onAppear {
-                withAnimation(.linear(duration: 1.0)) {
-                    progress = 0.8
-                }
+                progress = 0.8
             }
         }
     }
@@ -203,4 +198,61 @@ struct ImagePicker: UIViewControllerRepresentable {
     }
     
     func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+}
+
+// New view to recall and display the user's profile picture from Firestore
+struct RecalledProfilePictureView: View {
+    @State private var profilePictureURL: String?
+    @State private var isLoading: Bool = true
+    @State private var errorMessage: String?
+    
+    var body: some View {
+        VStack {
+            if isLoading {
+                ProgressView("Loading...")
+            } else if let errorMessage = errorMessage {
+                Text(errorMessage)
+                    .foregroundColor(.red)
+            } else if let urlString = profilePictureURL, let url = URL(string: urlString) {
+                AsyncImage(url: url) { phase in
+                    if let image = phase.image {
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } else if phase.error != nil {
+                        Text("Failed to load image")
+                    } else {
+                        ProgressView()
+                    }
+                }
+                .frame(width: 200, height: 200)
+                .clipShape(Circle())
+            } else {
+                Text("No profile picture available")
+            }
+        }
+        .onAppear {
+            loadProfilePictureURL()
+        }
+    }
+    
+    private func loadProfilePictureURL() {
+        guard let currentUser = Auth.auth().currentUser else {
+            self.errorMessage = "No authenticated user found."
+            self.isLoading = false
+            return
+        }
+        
+        let db = Firestore.firestore()
+        db.collection("users").document(currentUser.uid).getDocument { snapshot, error in
+            if let error = error {
+                self.errorMessage = "Error fetching user data: \(error.localizedDescription)"
+            } else if let data = snapshot?.data(), let url = data["profilePictureURL"] as? String {
+                self.profilePictureURL = url
+            } else {
+                self.errorMessage = "Profile picture URL not found."
+            }
+            self.isLoading = false
+        }
+    }
 }

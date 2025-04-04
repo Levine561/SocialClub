@@ -1,5 +1,6 @@
 import SwiftUI
 import FirebaseAuth
+import FirebaseFirestore
 
 struct SignUpView: View {
     // MARK: - State Variables
@@ -76,24 +77,34 @@ struct SignUpView: View {
                                 return
                             }
                             
-                            // Navigate on the main thread to ensure UI updates correctly
-                            DispatchQueue.main.async {
-                                navigateToBasicInfo = true
+                            if let authResult = authResult {
+                                // Save the email to Firestore
+                                Firestore.firestore().collection("users").document(authResult.user.uid).setData([
+                                    "email": email
+                                ]) { error in
+                                    if let error = error {
+                                        errorMessage = error.localizedDescription
+                                        showingAlert = true
+                                    } else {
+                                        DispatchQueue.main.async {
+                                            navigateToBasicInfo = true
+                                        }
+                                    }
+                                }
                             }
                         }
                     }) {
-                        Text("Sign Up")
+                        Text("Sign up")
                             .font(.headline)
                             .fontWeight(.semibold)
-                            .foregroundColor(.white)
+                            .foregroundColor((email.isEmpty || password.isEmpty || confirmPassword.isEmpty) ? Color(red: 142/255.0, green: 142/255.0, blue: 147/255.0) : Color.white)
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(Color(red: 17/255.0, green: 80/255.0, blue: 95/255.0)) // Hex #11505F
-                            .cornerRadius(8)
                     }
-                    .disabled(email.isEmpty || password.isEmpty || confirmPassword.isEmpty)
-                    .opacity((email.isEmpty || password.isEmpty || confirmPassword.isEmpty) ? 0.5 : 1.0)
+                    .background((email.isEmpty || password.isEmpty || confirmPassword.isEmpty) ? Color(red: 236/255.0, green: 236/255.0, blue: 236/255.0) : Color(red: 255/255.0, green: 49/255.0, blue: 95/255.0))
+                    .cornerRadius(8)
                     .padding(.horizontal, 16)
+                    .disabled(email.isEmpty || password.isEmpty || confirmPassword.isEmpty)
                     .alert(isPresented: $showingAlert) {
                         Alert(title: Text("Registration Error"),
                               message: Text(errorMessage),
@@ -102,14 +113,16 @@ struct SignUpView: View {
                     
                     Spacer()
                     
-                    // MARK: - Back to Login Link
+                    // MARK: - Back to Login Button
                     HStack {
                         Text("Already have an account?")
                             .foregroundColor(.gray)
                         
-                        NavigationLink(destination: LoginView().navigationBarBackButtonHidden(true)) {
+                        Button(action: {
+                            UIApplication.shared.windows.first?.rootViewController = UIHostingController(rootView: LoginView())
+                        }) {
                             Text("Login")
-                                .foregroundColor(Color(red: 17/255.0, green: 80/255.0, blue: 95/255.0))
+                                .foregroundColor(Color(red: 255/255.0, green: 49/255.0, blue: 95/255.0))
                                 .fontWeight(.semibold)
                         }
                     }
@@ -125,6 +138,7 @@ struct SignUpView: View {
                 ) {
                     EmptyView()
                 }
+                .animation(nil, value: navigateToBasicInfo)
             }
             .onTapGesture {
                 self.hideKeyboard()

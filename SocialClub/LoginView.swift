@@ -1,5 +1,6 @@
 import SwiftUI
 import FirebaseAuth
+import FirebaseFirestore
 
 #if canImport(UIKit)
 extension View {
@@ -16,6 +17,7 @@ struct LoginView: View {
     @State private var errorMessage: String?
     @State private var showErrorAlert: Bool = false
     @State private var navigateToExplore = false
+    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         NavigationView {
@@ -24,7 +26,7 @@ struct LoginView: View {
                 Group {
                     // MARK: - Logo & Tagline
                     VStack(spacing: 4) {
-                        Image("SocialClubLogo") // Replace with your actual logo asset name
+                        Image(colorScheme == .dark ? "Darkmodelogo" : "SocialClubLogo")
                             .resizable()
                             .scaledToFit()
                             .frame(width: 400, height: 80, alignment: .center)
@@ -33,13 +35,13 @@ struct LoginView: View {
                     // MARK: - Text Fields
                     VStack(spacing: 24) {
                         // Username Field
-                        TextField("Email or Username", text: $emailOrUsername)
+                        TextField("Email", text: $emailOrUsername)
                             .padding()
                             .background(Color(UIColor.secondarySystemBackground))
                             .cornerRadius(8)
                             .disableAutocorrection(true)
                             .autocapitalization(.none)
-                            .accessibility(label: Text("Email or Username"))
+                            .accessibility(label: Text("Email"))
                             .frame(height: 44)
                         
                         // Password Field
@@ -54,30 +56,34 @@ struct LoginView: View {
                     
                     // MARK: - Login Button
                     Button(action: {
-                        Auth.auth().signIn(withEmail: emailOrUsername, password: password) { authResult, error in
-                            if let error = error {
-                                errorMessage = error.localizedDescription
-                                showErrorAlert = true
-                                return
+                        let trimmedInput = emailOrUsername.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if trimmedInput.contains("@") {
+                            Auth.auth().signIn(withEmail: trimmedInput, password: password) { authResult, error in
+                                if let error = error {
+                                    errorMessage = error.localizedDescription
+                                    showErrorAlert = true
+                                    return
+                                }
+                                print("Login successful!")
+                                navigateToExplore = true
                             }
-                            
-                            print("Login successful!")
-                            navigateToExplore = true
+                        } else {
+                            errorMessage = "Please enter a valid email address."
+                            showErrorAlert = true
                         }
                     }) {
                         Text("Login")
                             .font(.headline)
                             .fontWeight(.semibold)
-                            .foregroundColor(.white)
+                            .foregroundColor((emailOrUsername.isEmpty || password.isEmpty) ? Color(red: 142/255.0, green: 142/255.0, blue: 147/255.0) : Color.white)
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(Color(red: 17/255.0, green: 80/255.0, blue: 95/255.0)) // Hex #11505F
-                            .cornerRadius(8)
-                            .frame(height: 48)
                     }
-                    .disabled(emailOrUsername.isEmpty || password.isEmpty)
-                    .opacity((emailOrUsername.isEmpty || password.isEmpty) ? 0.5 : 1.0)
+                    .background((emailOrUsername.isEmpty || password.isEmpty) ? Color(red: 236/255.0, green: 236/255.0, blue: 236/255.0) : Color(red: 255/255.0, green: 49/255.0, blue: 95/255.0))
+                    .cornerRadius(8)
+                    .frame(height: 48)
                     .padding(.horizontal, 16)
+                    .disabled(emailOrUsername.isEmpty || password.isEmpty)
                     
                     // MARK: - Forgot Password
                     Button(action: {
@@ -96,9 +102,11 @@ struct LoginView: View {
                         Text("Don’t have an account?")
                             .foregroundColor(.gray)
                         
-                        NavigationLink(destination: SignUpView().navigationBarBackButtonHidden(true)) {
-                            Text("Sign Up")
-                                .foregroundColor(Color(red: 17/255.0, green: 80/255.0, blue: 95/255.0))
+                        Button(action: {
+                            UIApplication.shared.windows.first?.rootViewController = UIHostingController(rootView: SignUpView())
+                        }) {
+                            Text("Sign up")
+                                .foregroundColor(Color(red: 255/255.0, green: 49/255.0, blue: 95/255.0))
                                 .fontWeight(.semibold)
                         }
                     }
@@ -107,12 +115,13 @@ struct LoginView: View {
                 }
                 
                 NavigationLink(
-                    destination: ExploreView(),
+                    destination: ExploreView().navigationBarBackButtonHidden(true),
                     isActive: $navigateToExplore,
                     label: {
                         EmptyView()
                     }
-                ).hidden()
+                ).animation(nil, value: navigateToExplore)
+                .hidden()
             }
             .onTapGesture {
                 self.hideKeyboard()

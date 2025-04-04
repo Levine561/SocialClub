@@ -49,6 +49,7 @@ struct InterestsView: View {
     @State private var shouldNavigate = false
     // Controls navigation to the Basics Info page
     @State private var goToBasicsInfo = false
+    @Environment(\.colorScheme) var colorScheme
     // Progress state variable
     @State private var progress: Double = 0.2
     
@@ -75,13 +76,13 @@ struct InterestsView: View {
         NavigationView {
             VStack(alignment: .leading, spacing: 0) {
                 ProgressView(value: progress, total: 1.0)
-                    .tint(Color(red: 17/255.0, green: 80/255.0, blue: 95/255.0))
+                .tint(Color(red: 135/255.0, green: 173/255.0, blue: 255/255.0))
                     .progressViewStyle(LinearProgressViewStyle())
                     .padding(.horizontal)
                     .padding(.top, 24)
 
                 // Title
-                Text("What Interests You?")
+                Text("What interests you?")
                     .font(.title2)
                     .fontWeight(.semibold)
                     .frame(maxWidth: .infinity)
@@ -102,18 +103,11 @@ struct InterestsView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
                         ForEach(Array(interestsByCategory.keys.sorted().enumerated()), id: \.offset) { index, category in
-                            if index > 0 {
-                                Divider()
-                                    .background(Color.gray)
-                                    .padding(.horizontal, 16)
-                            }
                             VStack(alignment: .leading, spacing: 8) {
-                                // Category header
                                 Text(category)
                                     .font(.headline)
                                     .padding(.horizontal, 16)
                                 
-                                // Horizontal scroll view of chips in a row
                                 FlowLayout(spacing: 12) {
                                     let items = interestsByCategory[category] ?? []
                                     ForEach(items, id: \.self) { interest in
@@ -132,18 +126,29 @@ struct InterestsView: View {
                                             }
                                             .lineLimit(1)
                                             .fixedSize()
-                                            .foregroundColor(selectedInterests.contains(interest) ? .white : Color(red: 17/255.0, green: 80/255.0, blue: 95/255.0))
+                                            .foregroundColor(selectedInterests.contains(interest) && colorScheme == .dark ? Color.black : (colorScheme == .dark ? Color.white : Color.black))
                                             .padding(.vertical, 6)
                                             .padding(.horizontal, 12)
-                                            .background(selectedInterests.contains(interest) ? Color(red: 17/255.0, green: 80/255.0, blue: 95/255.0) : Color.clear)
+                                            .background(selectedInterests.contains(interest) ? Color(red: 215/255.0, green: 228/255.0, blue: 255/255.0) : Color.clear)
                                             .clipShape(Capsule())
                                             .overlay(
-                                                Capsule().stroke(Color(red: 17/255.0, green: 80/255.0, blue: 95/255.0), lineWidth: 1)
+                                                Group {
+                                                    if !selectedInterests.contains(interest) {
+                                                        Capsule().stroke(Color(red: 209/255.0, green: 209/255.0, blue: 209/255.0), lineWidth: 1)
+                                                    }
+                                                }
                                             )
                                         }
                                     }
                                 }
                                 .padding(.horizontal, 16)
+                                .padding(.bottom, 8)
+                                
+                                if index < interestsByCategory.keys.count - 1 {
+                                    Divider()
+                                        .background(Color(red: 209/255.0, green: 209/255.0, blue: 209/255.0))
+                                        .padding(.horizontal, 16)
+                                }
                             }
                         }
                     }
@@ -158,18 +163,17 @@ struct InterestsView: View {
                 }) {
                     Text("Continue")
                         .fontWeight(.semibold)
-                        .foregroundColor(.white)
+                        .foregroundColor(selectedInterests.count < 5 ? Color(red: 142/255.0, green: 142/255.0, blue: 147/255.0) : Color.white)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color(red: 17/255.0, green: 80/255.0, blue: 95/255.0))
+                        .background(selectedInterests.count < 5 ? Color(red: 236/255.0, green: 236/255.0, blue: 236/255.0) : Color(red: 255/255.0, green: 49/255.0, blue: 95/255.0))
                         .cornerRadius(8)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 16)
                 .disabled(selectedInterests.count < 5)
-                .opacity(selectedInterests.count < 5 ? 0.5 : 1.0)
                 
-                // NavigationLink to UsernameView
+                // NavigationLink to ProfilePictureView
                 NavigationLink(destination: UsernameView().navigationBarBackButtonHidden(true), isActive: $shouldNavigate) {
                     EmptyView()
                 }
@@ -178,9 +182,7 @@ struct InterestsView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
-                withAnimation(.linear(duration: 1.0)) {
-                    progress = 0.4
-                }
+                progress = 0.4
             }
         }
     }

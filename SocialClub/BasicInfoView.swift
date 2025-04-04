@@ -23,7 +23,9 @@ struct BasicInfoView: View {
     @State private var progress: Double = 0.0
     @FocusState private var nameFieldIsFocused: Bool
     @FocusState private var dobFieldIsFocused: Bool
-
+    
+    @Environment(\.colorScheme) var colorScheme
+    
     var body: some View {
         ZStack {
             // Main Scrollable Content
@@ -31,13 +33,13 @@ struct BasicInfoView: View {
                 VStack(spacing: 20) {
 
                     ProgressView(value: progress, total: 1.0)
-                        .tint(Color(red: 17/255.0, green: 80/255.0, blue: 95/255.0))
+                        .tint(Color(red: 135/255.0, green: 173/255.0, blue: 255/255.0))
                         .progressViewStyle(LinearProgressViewStyle())
                         .padding(.horizontal)
                         .padding(.top, 24)
 
                     // Title
-                    Text("Tell Us About You")
+                    Text("Tell us about you")
                         .font(.title2)
                         .fontWeight(.semibold)
                         .padding(.top, 4)
@@ -112,30 +114,8 @@ struct BasicInfoView: View {
                     }
                     .padding(.horizontal)
 
-                    // Continue Button
-                    Button(action: {
-                        continueAction()
-                        dismissKeyboard()
-                        nameFieldIsFocused = false
-                        dobFieldIsFocused = false
-                    }) {
-                        Text("Continue")
-                            .fontWeight(.semibold)
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color(red: 17/255.0, green: 80/255.0, blue: 95/255.0))
-                            .cornerRadius(8)
-                    }
-                    .disabled(name.isEmpty || dateOfBirth.isEmpty || selectedGender == nil)
-                    .opacity((name.isEmpty || dateOfBirth.isEmpty || selectedGender == nil) ? 0.5 : 1.0)
-                    .padding(.horizontal)
-                    .padding(.top, 20)
-
                     Spacer()
                 }
-                // Extra bottom padding so content isn’t hidden behind the button
-                .padding(.bottom, 80)
             }
             .background(Color(UIColor.systemBackground))
             .alert(isPresented: $showingAlert) {
@@ -145,9 +125,7 @@ struct BasicInfoView: View {
             }
             .onAppear {
                 subscribeToKeyboardEvents()
-                withAnimation(.linear(duration: 1.0)) {
-                    progress = 0.2
-                }
+                progress = 0.2
             }
             .onDisappear { NotificationCenter.default.removeObserver(self) }
             // Dismiss keyboard when tapping outside inputs
@@ -156,6 +134,27 @@ struct BasicInfoView: View {
                 dismissKeyboard()
                 nameFieldIsFocused = false
                 dobFieldIsFocused = false
+            }
+
+            VStack {
+                Spacer()
+                Button(action: {
+                    continueAction()
+                    dismissKeyboard()
+                    nameFieldIsFocused = false
+                    dobFieldIsFocused = false
+                }) {
+                    Text("Continue")
+                        .fontWeight(.semibold)
+                        .foregroundColor((name.isEmpty || dateOfBirth.isEmpty || selectedGender == nil) ? Color(red: 142/255, green: 142/255, blue: 147/255) : Color(red: 255/255, green: 255/255, blue: 255/255))
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background((name.isEmpty || dateOfBirth.isEmpty || selectedGender == nil) ? Color(red: 236/255, green: 236/255, blue: 236/255) : Color(red: 255/255, green: 49/255, blue: 95/255))
+                        .cornerRadius(8)
+                }
+                .disabled(name.isEmpty || dateOfBirth.isEmpty || selectedGender == nil)
+                .padding(.horizontal)
+                .padding(.bottom, 20)
             }
 
             NavigationLink(destination: InterestsView().navigationBarBackButtonHidden(true), isActive: $navigateToInterests) {
@@ -174,15 +173,15 @@ struct BasicInfoView: View {
         }) {
             Text(title)
                 .fontWeight(.semibold)
-                .foregroundColor(selectedGender == tag ? .white : Color(red: 17/255.0, green: 80/255.0, blue: 95/255.0))
+                .foregroundColor(selectedGender == tag ? Color.black : (colorScheme == .dark ? Color.white : Color(red: 50/255.0, green: 50/255.0, blue: 50/255.0)))
                 .padding(.vertical, 8)
                 .padding(.horizontal, 16)
                 .frame(maxWidth: .infinity)
-                .background(selectedGender == tag ? Color(red: 17/255.0, green: 80/255.0, blue: 95/255.0) : Color.clear)
+                .background(selectedGender == tag ? Color(red: 215/255.0, green: 228/255.0, blue: 255/255.0) : Color.clear)
                 .clipShape(Capsule())
                 .overlay(
                     Capsule()
-                        .stroke(Color(red: 17/255.0, green: 80/255.0, blue: 95/255.0), lineWidth: 1)
+                        .stroke(selectedGender == tag ? Color.clear : Color(red: 209/255.0, green: 209/255.0, blue: 209/255.0), lineWidth: 1)
                 )
         }
     }

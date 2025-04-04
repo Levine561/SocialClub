@@ -1,5 +1,7 @@
 import SwiftUI
 import MapKit
+import FirebaseAuth
+import FirebaseFirestore
 
 extension Color {
     static var adaptiveBackground: Color {
@@ -47,7 +49,24 @@ struct ExploreView: View {
     @State private var profileImage: UIImage? = nil
     @State private var showLocationModal: Bool = true
     @State private var showCameraView = false
+    @State private var showProfileView: Bool = false
     @State private var resetCamera: Bool = false
+
+    private func loadProfileImage() {
+        guard let currentUser = Auth.auth().currentUser else { return }
+        let db = Firestore.firestore()
+        db.collection("users").document(currentUser.uid).getDocument { snapshot, error in
+            if let data = snapshot?.data(), let urlString = data["profilePictureURL"] as? String, let url = URL(string: urlString) {
+                URLSession.shared.dataTask(with: url) { data, response, error in
+                    if let data = data, let image = UIImage(data: data) {
+                        DispatchQueue.main.async {
+                            self.profileImage = image
+                        }
+                    }
+                }.resume()
+            }
+        }
+    }
 
     var body: some View {
         Group {
@@ -67,34 +86,61 @@ struct ExploreView: View {
                     // 3D Map (simplified)
                     ThreeDMapView(region: $region, resetCamera: $resetCamera)
                         .edgesIgnoringSafeArea(.all)
+                    
+                    // Blur overlay at top for improved readability of status bar content
+                    VStack {
+                        Rectangle()
+                            .fill(.ultraThinMaterial)
+                            .frame(height: 50)
+                            .mask(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [Color.white, Color.clear]),
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                        Spacer()
+                    }
+                    .edgesIgnoringSafeArea(.top)
 
                     // Profile image and search/location container (moved from overlay)
                     HStack(alignment: .top) {
-                        // Profile image on the top left as button
                         if let profileImage = profileImage {
                             Button(action: {
-                                // Profile tapped action
+                                showProfileView = true
                             }) {
-                                Image(uiImage: profileImage)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 56, height: 56)
-                                    .clipShape(Circle())
+                                ZStack {
+                                    // Container 4 px larger than the profile image with the same style as the top right-hand rail
+                                    Circle()
+                                        .fill(.regularMaterial)
+                                        .frame(width: 68, height: 68)
+                                    Image(uiImage: profileImage)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 64, height: 64)
+                                        .clipShape(Circle())
+                                }
                             }
                             .buttonStyle(PressableButtonStyle())
                         } else {
                             Button(action: {
-                                // Profile tapped action
+                                showProfileView = true
                             }) {
                                 ZStack {
+                                    // Container 4 px larger than the default profile image
                                     Circle()
                                         .fill(.regularMaterial)
-                                        .frame(width: 56, height: 56)
-                                    Image(systemName: "person.crop.circle.fill")
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 52, height: 52)
-                                        .foregroundColor(.secondary)
+                                        .frame(width: 68, height: 68)
+                                    ZStack {
+                                        Circle()
+                                            .fill(.regularMaterial)
+                                            .frame(width: 68, height: 68)
+                                        Image(systemName: "person.crop.circle.fill")
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(width: 60, height: 60)
+                                            .foregroundColor(.secondary)
+                                    }
                                 }
                             }
                             .buttonStyle(PressableButtonStyle())
@@ -146,7 +192,7 @@ struct ExploreView: View {
                         }
                     }
                     .padding()
-                    .offset(y: -20)
+                    .offset(y: -12)
                     .zIndex(0)
 
                     // Pull-up bottom sheet
@@ -162,7 +208,7 @@ struct ExploreView: View {
                             // Hotspots
                             SectionView(
                                 title: "Hotspots",
-                                subtitle: "Explore your area",
+                                subtitle: "Explore and discover your area",
                                 placeholders: 5
                             )
 
@@ -197,10 +243,14 @@ struct ExploreView: View {
                     }
                 }
                 .onAppear {
+                    loadProfileImage()
                     // Additional onAppear actions if needed
                 }
                 .fullScreenCover(isPresented: $showCameraView) {
                     CameraView()
+                }
+                .fullScreenCover(isPresented: $showProfileView) {
+                    ProfileView()
                 }
             }
         }
@@ -223,7 +273,7 @@ struct SectionView: View {
 
     // Dropdown
     @State private var selectedOption = "Hottest"
-    let menuOptions = ["Hottest", "For You", "Newest"]
+    let menuOptions = ["Hottest", "For you", "Nearest"]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -235,7 +285,7 @@ struct SectionView: View {
                     .foregroundColor(.primary)
 
                 Spacer()
-
+                
                 Menu {
                     ForEach(menuOptions, id: \.self) { option in
                         Button(option) {
@@ -246,9 +296,11 @@ struct SectionView: View {
                     HStack(spacing: 4) {
                         Text(selectedOption)
                             .font(.subheadline)
+                            .foregroundColor(Color(red: 1.0, green: 49/255, blue: 95/255))
                         Image(systemName: "chevron.down")
                             .font(.subheadline)
-                    }.foregroundColor(.primary)
+                            .foregroundColor(Color(red: 1.0, green: 49/255, blue: 95/255))
+                    }
                 }
             }
 
@@ -284,7 +336,9 @@ struct ThreeDMapView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> MKMapView {
         let mapView = MKMapView(frame: .zero)
+        mapView.showsCompass = false
         mapView.showsUserLocation = true
+        mapView.pointOfInterestFilter = MKPointOfInterestFilter.excludingAll
         mapView.showsBuildings = true
         mapView.isScrollEnabled = true    // Enables panning
         mapView.isRotateEnabled = true    // Allow rotation
