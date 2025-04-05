@@ -15,7 +15,7 @@ struct ProfilePictureView: View {
         NavigationView {
             VStack(spacing: 24) {
                 ProgressView(value: progress, total: 1.0)
-                    .tint(Color(red: 135/255.0, green: 173/255.0, blue: 255/255.0))
+                    .tint(Color(red: 55/255.0, green: 119/255.0, blue: 1.0))
                     .progressViewStyle(LinearProgressViewStyle())
                     .frame(maxWidth: .infinity)
                     .padding(.top, 24)
@@ -53,7 +53,7 @@ struct ProfilePictureView: View {
                     }) {
                         Text("Select photo")
                             .font(.subheadline)
-                            .foregroundColor(Color(red: 255/255.0, green: 49/255.0, blue: 95/255.0))
+                            .foregroundColor(Color(red: 55/255.0, green: 119/255.0, blue: 1.0))
                             .padding(.vertical, 8)
                             .padding(.horizontal, 16)
                     }
@@ -81,7 +81,7 @@ struct ProfilePictureView: View {
                             .foregroundColor(isDisabled ? Color(red: 142/255.0, green: 142/255.0, blue: 147/255.0) : Color(red: 255/255.0, green: 255/255.0, blue: 255/255.0))
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(isDisabled ? Color(red: 236/255.0, green: 236/255.0, blue: 236/255.0) : Color(red: 255/255.0, green: 49/255.0, blue: 95/255.0))
+                            .background(isDisabled ? Color(red: 236/255.0, green: 236/255.0, blue: 236/255.0) : Color(red: 55/255.0, green: 119/255.0, blue: 1.0))
                             .cornerRadius(8)
                     }
                 }

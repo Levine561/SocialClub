@@ -50,7 +50,7 @@ struct UsernameView: View {
             // Progress Bar indicating the current step in the signup process
             ProgressView(value: progress)
                 .progressViewStyle(LinearProgressViewStyle())
-                .tint(Color(red: 135/255, green: 173/255, blue: 255/255))
+                .tint(Color(red: 55/255.0, green: 119/255.0, blue: 1.0))
                 .frame(maxWidth: .infinity)
             Text("Create a username")
                 .font(.title2)
@@ -87,7 +87,7 @@ struct UsernameView: View {
                 Text("Continue")
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background((username.isEmpty || isUsernameAvailable != true) ? Color(red: 236/255, green: 236/255, blue: 236/255) : Color(red: 255/255, green: 49/255, blue: 95/255))
+                    .background((username.isEmpty || isUsernameAvailable != true) ? Color(red: 236/255, green: 236/255, blue: 236/255) : Color(red: 55/255, green: 119/255, blue: 1.0))
                     .foregroundColor((username.isEmpty || isUsernameAvailable != true) ? Color(red: 142/255, green: 142/255, blue: 147/255) : Color(red: 255/255, green: 255/255, blue: 255/255))
                     .cornerRadius(8)
             }

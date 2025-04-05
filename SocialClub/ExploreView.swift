@@ -16,9 +16,74 @@ extension Color {
         })
     }
 }
+ 
+struct SkeletonCircleView: View {
+    @Environment(\.colorScheme) var colorScheme
+    @State private var animationOffset: CGFloat = -100  // initial offset
+    var body: some View {
+        Circle()
+            .fill(Color.gray.opacity(0.3))
+            .overlay(
+                GeometryReader { geometry in
+                    let gradientWidth = geometry.size.width * 1.5
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: [Color.clear, Color.white.opacity(colorScheme == .dark ? 0.1 : 0.25), Color.clear]),
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: gradientWidth)
+                        .offset(x: animationOffset)
+                        .onAppear {
+                            animationOffset = -gradientWidth
+                            withAnimation(Animation.linear(duration: 3.0).repeatForever(autoreverses: false)) {
+                                animationOffset = geometry.size.width
+                            }
+                        }
+                }
+            )
+            .clipShape(Circle())
+    }
+}
+
+struct SkeletonRectangleView: View {
+    var cornerRadius: CGFloat = 6
+    @Environment(\.colorScheme) var colorScheme
+    @State private var animationOffset: CGFloat = -100  // initial offset
+    
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .fill(Color.gray.opacity(0.3))
+            .overlay(
+                GeometryReader { geometry in
+                    let gradientWidth = geometry.size.width * 1.5
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .fill(
+                        LinearGradient(
+                                gradient: Gradient(colors: [Color.clear, Color.white.opacity(colorScheme == .dark ? 0.1 : 0.25), Color.clear]),
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: gradientWidth)
+                        .offset(x: animationOffset)
+                        .onAppear {
+                            animationOffset = -gradientWidth
+                            withAnimation(Animation.linear(duration: 3.0).repeatForever(autoreverses: false)) {
+                                animationOffset = geometry.size.width
+                            }
+                        }
+                }
+            )
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+    }
+}
 
 class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published var currentLocation: CLLocation?  // Published location property
+    @Published var heading: CLLocationDirection = 0
     private let manager = CLLocationManager()
     
     override init() {
@@ -29,6 +94,13 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         // Request permission and start updating location
         manager.requestWhenInUseAuthorization()
         manager.startUpdatingLocation()
+        manager.startUpdatingHeading()
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
+        DispatchQueue.main.async {
+            self.heading = newHeading.trueHeading
+        }
     }
     
     // Update the published currentLocation whenever new data is available
@@ -51,6 +123,7 @@ struct ExploreView: View {
     @State private var showCameraView = false
     @State private var showProfileView: Bool = false
     @State private var resetCamera: Bool = false
+    @State private var userHeading: CLLocationDirection = 0
 
     private func loadProfileImage() {
         guard let currentUser = Auth.auth().currentUser else { return }
@@ -84,7 +157,7 @@ struct ExploreView: View {
                 // Once location is available, update region and show the map and UI
                 ZStack(alignment: .top) {
                     // 3D Map (simplified)
-                    ThreeDMapView(region: $region, resetCamera: $resetCamera)
+                    ThreeDMapView(region: $region, resetCamera: $resetCamera, userHeading: userHeading)
                         .edgesIgnoringSafeArea(.all)
                     
                     // Blur overlay at top for improved readability of status bar content
@@ -106,9 +179,11 @@ struct ExploreView: View {
                     // Profile image and search/location container (moved from overlay)
                     HStack(alignment: .top) {
                         if let profileImage = profileImage {
-                            Button(action: {
+                        Button(action: {
+                            withAnimation(nil) {
                                 showProfileView = true
-                            }) {
+                            }
+                        }) {
                                 ZStack {
                                     // Container 4 px larger than the profile image with the same style as the top right-hand rail
                                     Circle()
@@ -126,22 +201,8 @@ struct ExploreView: View {
                             Button(action: {
                                 showProfileView = true
                             }) {
-                                ZStack {
-                                    // Container 4 px larger than the default profile image
-                                    Circle()
-                                        .fill(.regularMaterial)
-                                        .frame(width: 68, height: 68)
-                                    ZStack {
-                                        Circle()
-                                            .fill(.regularMaterial)
-                                            .frame(width: 68, height: 68)
-                                        Image(systemName: "person.crop.circle.fill")
-                                            .resizable()
-                                            .scaledToFill()
-                                            .frame(width: 60, height: 60)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
+                                SkeletonCircleView()
+                                    .frame(width: 68, height: 68)
                             }
                             .buttonStyle(PressableButtonStyle())
                         }
@@ -181,7 +242,9 @@ struct ExploreView: View {
 
                             // Camera button in a circle container
                             Button(action: {
-                                showCameraView = true
+                                withAnimation(nil) {
+                                    showCameraView = true
+                                }
                             }) {
                                 Image(systemName: "camera")
                                     .font(.title2)
@@ -191,8 +254,7 @@ struct ExploreView: View {
                             .buttonStyle(PressableButtonStyle())
                         }
                     }
-                    .padding()
-                    .offset(y: -12)
+                    .padding(.horizontal, 16)
                     .zIndex(0)
 
                     // Pull-up bottom sheet
@@ -223,6 +285,7 @@ struct ExploreView: View {
                             HStack {
                                 Spacer()
                                 Text("Keep exploring!")
+                                    .font(.footnote)
                                     .foregroundColor(.primary)
                                 Spacer()
                             }
@@ -241,6 +304,9 @@ struct ExploreView: View {
                             resetCamera = true
                         }
                     }
+                }
+                .onReceive(locationManager.$heading) { newHeading in
+                    userHeading = newHeading
                 }
                 .onAppear {
                     loadProfileImage()
@@ -273,7 +339,7 @@ struct SectionView: View {
 
     // Dropdown
     @State private var selectedOption = "Hottest"
-    let menuOptions = ["Hottest", "For you", "Nearest"]
+    let menuOptions = ["Nearest", "For you", "Hottest"]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -296,10 +362,10 @@ struct SectionView: View {
                     HStack(spacing: 4) {
                         Text(selectedOption)
                             .font(.subheadline)
-                            .foregroundColor(Color(red: 1.0, green: 49/255, blue: 95/255))
+                            .foregroundColor(Color(red: 55/255.0, green: 119/255.0, blue: 1.0))
                         Image(systemName: "chevron.down")
                             .font(.subheadline)
-                            .foregroundColor(Color(red: 1.0, green: 49/255, blue: 95/255))
+                            .foregroundColor(Color(red: 55/255.0, green: 119/255.0, blue: 1.0))
                     }
                 }
             }
@@ -314,11 +380,9 @@ struct SectionView: View {
                 HStack(spacing: 8) {
                     ForEach(0..<placeholders, id: \.self) { _ in
                         // Blank image placeholder
-                        Rectangle()
-                            .fill(Color.gray.opacity(0.3))
+                        SkeletonRectangleView(cornerRadius: 6)
                             .frame(width: title == "Sights" ? 120 : 140,
                                    height: title == "Sights" ? 120 * 16 / 9.0 : 140)
-                            .cornerRadius(6)
                     }
                 }
                 .padding(.vertical, 4)
@@ -333,6 +397,7 @@ struct SectionView: View {
 struct ThreeDMapView: UIViewRepresentable {
     @Binding var region: MKCoordinateRegion
     @Binding var resetCamera: Bool
+    var userHeading: CLLocationDirection
 
     func makeUIView(context: Context) -> MKMapView {
         let mapView = MKMapView(frame: .zero)
@@ -345,7 +410,7 @@ struct ThreeDMapView: UIViewRepresentable {
         mapView.isPitchEnabled = true     // Locks the camera pitch
         
         let computedAltitude = max(500, min(2000, region.span.latitudeDelta * 111000))
-        let camera = MKMapCamera(lookingAtCenter: region.center, fromDistance: computedAltitude, pitch: 60, heading: 0)
+        let camera = MKMapCamera(lookingAtCenter: region.center, fromDistance: computedAltitude, pitch: 60, heading: userHeading)
         mapView.setCamera(camera, animated: false)
 
         return mapView
@@ -355,8 +420,7 @@ struct ThreeDMapView: UIViewRepresentable {
         if resetCamera {
             let computedAltitude = max(500, min(2000, region.span.latitudeDelta * 111000))
             // Use the current heading or a default value
-            let currentHeading = uiView.camera.heading
-            let camera = MKMapCamera(lookingAtCenter: region.center, fromDistance: computedAltitude, pitch: 60, heading: currentHeading)
+            let camera = MKMapCamera(lookingAtCenter: region.center, fromDistance: computedAltitude, pitch: 60, heading: userHeading)
             uiView.setCamera(camera, animated: true)
             DispatchQueue.main.async {
                 self.resetCamera = false

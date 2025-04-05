@@ -101,7 +101,7 @@ struct SignUpView: View {
                             .frame(maxWidth: .infinity)
                             .padding()
                     }
-                    .background((email.isEmpty || password.isEmpty || confirmPassword.isEmpty) ? Color(red: 236/255.0, green: 236/255.0, blue: 236/255.0) : Color(red: 255/255.0, green: 49/255.0, blue: 95/255.0))
+                    .background((email.isEmpty || password.isEmpty || confirmPassword.isEmpty) ? Color(red: 236/255.0, green: 236/255.0, blue: 236/255.0) : Color(red: 55/255.0, green: 119/255.0, blue: 1.0))
                     .cornerRadius(8)
                     .padding(.horizontal, 16)
                     .disabled(email.isEmpty || password.isEmpty || confirmPassword.isEmpty)
@@ -122,12 +122,12 @@ struct SignUpView: View {
                             UIApplication.shared.windows.first?.rootViewController = UIHostingController(rootView: LoginView())
                         }) {
                             Text("Login")
-                                .foregroundColor(Color(red: 255/255.0, green: 49/255.0, blue: 95/255.0))
+                                .foregroundColor(Color(red: 55/255.0, green: 119/255.0, blue: 1.0))
                                 .fontWeight(.semibold)
                         }
                     }
                     .font(.footnote)
-                    .padding(.bottom, 16)
+                    .padding(.bottom, 24)
                 }
                 .padding(.top, 40) // Changed padding from 80 to 40
                 

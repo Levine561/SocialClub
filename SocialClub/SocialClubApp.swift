@@ -11,11 +11,33 @@ struct SocialClubApp: App {
     
     var body: some Scene {
         WindowGroup {
-            // Check if a user is already logged in using Firebase Auth
-            if Auth.auth().currentUser != nil && UserDefaults.standard.bool(forKey: "loggedInOnThisDevice") {
-                ExploreView()
+            ContentView()
+        }
+    }
+}
+
+struct ContentView: View {
+    @State private var isActive = false
+    
+    var body: some View {
+        Group {
+            if isActive {
+                // After splash screen, check authentication status
+                if Auth.auth().currentUser != nil {
+                    ExploreView()
+                } else {
+                    LoginView()
+                }
             } else {
-                LoginView()
+                SplashView()
+            }
+        }
+        .onAppear {
+            // Duration of the splash screen
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                withAnimation {
+                    isActive = true
+                }
             }
         }
     }

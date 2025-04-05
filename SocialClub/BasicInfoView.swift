@@ -33,7 +33,7 @@ struct BasicInfoView: View {
                 VStack(spacing: 20) {
 
                     ProgressView(value: progress, total: 1.0)
-                        .tint(Color(red: 135/255.0, green: 173/255.0, blue: 255/255.0))
+                        .tint(Color(red: 55/255.0, green: 119/255.0, blue: 1.0))
                         .progressViewStyle(LinearProgressViewStyle())
                         .padding(.horizontal)
                         .padding(.top, 24)
@@ -48,7 +48,7 @@ struct BasicInfoView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Hi, my name is ______.")
                             .foregroundColor(.secondary)
-                        TextField("First name", text: $name)
+                        TextField("Name", text: $name)
                             .padding()
                             .background(Color(UIColor.secondarySystemBackground))
                             .cornerRadius(8)
@@ -149,7 +149,7 @@ struct BasicInfoView: View {
                         .foregroundColor((name.isEmpty || dateOfBirth.isEmpty || selectedGender == nil) ? Color(red: 142/255, green: 142/255, blue: 147/255) : Color(red: 255/255, green: 255/255, blue: 255/255))
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background((name.isEmpty || dateOfBirth.isEmpty || selectedGender == nil) ? Color(red: 236/255, green: 236/255, blue: 236/255) : Color(red: 255/255, green: 49/255, blue: 95/255))
+                        .background((name.isEmpty || dateOfBirth.isEmpty || selectedGender == nil) ? Color(red: 236/255, green: 236/255, blue: 236/255) : Color(red: 55/255, green: 119/255, blue: 1.0))
                         .cornerRadius(8)
                 }
                 .disabled(name.isEmpty || dateOfBirth.isEmpty || selectedGender == nil)
@@ -160,6 +160,8 @@ struct BasicInfoView: View {
             NavigationLink(destination: InterestsView().navigationBarBackButtonHidden(true), isActive: $navigateToInterests) {
                 EmptyView()
             }
+            .animation(nil, value: navigateToInterests)
+            .hidden()
         }
     }
 
@@ -249,7 +251,7 @@ struct BasicInfoView: View {
                     // Save gender and dateOfBirth locally
                     UserDefaults.standard.set(gender, forKey: "gender")
                     UserDefaults.standard.set(dateOfBirth, forKey: "dateOfBirth")
-                    // Navigate to next screen if desired
+                    // Navigate to next screen if desired without slide animation
                     DispatchQueue.main.async {
                         navigateToInterests = true
                     }

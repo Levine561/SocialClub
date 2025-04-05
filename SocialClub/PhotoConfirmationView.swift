@@ -7,78 +7,68 @@
 
 import SwiftUI
 import AVKit
+import FirebaseStorage
 
 struct PhotoConfirmationView: View {
+    let image: UIImage
     let mediaURL: URL
     
     @Environment(\.dismiss) var dismiss
-    @State private var postCopy: String = ""
     @State private var navigateToCameraView: Bool = false
     
     var body: some View {
-        VStack {
-            NavigationLink(destination: CameraView(), isActive: $navigateToCameraView) {
-                EmptyView()
-            }
-            
-            // Navigation bar with back arrow
-            HStack {
-                Button(action: {
-                    navigateToCameraView = true
-                }) {
-                    Image(systemName: "chevron.left")
-                        .font(.title)
-                        .padding()
-                }
-                Spacer()
-            }
-            
-            // Display media
+        ZStack {
+            // Full-screen media
             if isImage {
-                if let uiImage = UIImage(contentsOfFile: mediaURL.path) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(maxWidth: .infinity, maxHeight: 300)
-                        .clipped()
-                } else {
-                    Text("Unable to load image")
-                }
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+                    .ignoresSafeArea()
             } else {
                 VideoPlayer(player: AVPlayer(url: mediaURL))
-                    .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: .infinity, maxHeight: 300)
+                    .ignoresSafeArea()
             }
-            
-            // Text editor for post copy
-            TextEditor(text: $postCopy)
-                .frame(height: 100)
-                .padding()
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.gray.opacity(0.5), lineWidth: 1)
-                )
-                .padding(.horizontal)
-            
-            // Confirmation button
-            Button(action: {
-                // Process the confirmation (e.g., upload post with copy)
-                print("Post confirmed with copy: \(postCopy)")
-                dismiss()
-            }) {
-                Text("Confirm")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(8)
+
+            // X button in top-left corner
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Button(action: {
+                        // Delete from Firebase
+                        let ref = Storage.storage().reference(forURL: mediaURL.absoluteString)
+                        ref.delete { error in
+                            if let error = error {
+                                print("Failed to delete photo: \(error)")
+                            } else {
+                                print("Photo successfully deleted from Firebase.")
+                            }
+                            // Navigate back to camera
+                            navigateToCameraView = true
+                        }
+                    }) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 22))           // Size = 22 points
+                            .foregroundColor(.white)          // White icon
+                            .padding(8)                       // Extra padding around icon
+                            .background(
+                                Circle().fill(Color.black.opacity(0.5))
+                            )                                  // Semi-transparent black circle
+                    }
+                    .padding(.leading, 16)
+
+                    Spacer()
+                }
+
+                Spacer()
             }
-            .padding()
-            
-            Spacer()
+            .padding(.top, 16)
+            .padding(.horizontal, 16)
         }
-        .navigationBarHidden(true)
+        // Present CameraView full screen when navigateToCameraView is true
+        .fullScreenCover(isPresented: $navigateToCameraView) {
+            CameraView()
+        }
     }
     
     var isImage: Bool {
@@ -88,5 +78,5 @@ struct PhotoConfirmationView: View {
 }
 
 #Preview {
-    PhotoConfirmationView(mediaURL: URL(string: "https://example.com/image.jpg")!)
+    PhotoConfirmationView(image: UIImage(contentsOfFile: "path/to/image.jpg")!, mediaURL: URL(string: "https://example.com/image.jpg")!)
 }

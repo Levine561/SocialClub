@@ -76,7 +76,7 @@ struct InterestsView: View {
         NavigationView {
             VStack(alignment: .leading, spacing: 0) {
                 ProgressView(value: progress, total: 1.0)
-                .tint(Color(red: 135/255.0, green: 173/255.0, blue: 255/255.0))
+                .tint(Color(red: 55/255.0, green: 119/255.0, blue: 1.0))
                     .progressViewStyle(LinearProgressViewStyle())
                     .padding(.horizontal)
                     .padding(.top, 24)
@@ -166,7 +166,7 @@ struct InterestsView: View {
                         .foregroundColor(selectedInterests.count < 5 ? Color(red: 142/255.0, green: 142/255.0, blue: 147/255.0) : Color.white)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(selectedInterests.count < 5 ? Color(red: 236/255.0, green: 236/255.0, blue: 236/255.0) : Color(red: 255/255.0, green: 49/255.0, blue: 95/255.0))
+                        .background(selectedInterests.count < 5 ? Color(red: 236/255.0, green: 236/255.0, blue: 236/255.0) : Color(red: 55/255.0, green: 119/255.0, blue: 1.0))
                         .cornerRadius(8)
                 }
                 .padding(.horizontal, 16)

@@ -11,7 +11,7 @@ struct WelcomeView: View {
                     // Removed: Spacer().frame(height: 80) // Ensure content is below the dynamic island.
                     
                     ProgressView(value: progress, total: 1.0)
-                        .tint(Color(red: 135/255.0, green: 173/255.0, blue: 255/255.0))
+                        .tint(Color(red: 55/255.0, green: 119/255.0, blue: 1.0))
                         .progressViewStyle(LinearProgressViewStyle())
                         .frame(maxWidth: .infinity)
                         .padding(.top, 24)
@@ -30,7 +30,7 @@ struct WelcomeView: View {
                             Image(systemName: "camera.fill")
                                 .font(.title2)
                                 .frame(width: 40, alignment: .center)
-                                .foregroundColor(.primary)
+                                .foregroundColor(Color.gray)
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Post your sights")
                                     .font(.headline)
@@ -46,7 +46,7 @@ struct WelcomeView: View {
                             Image(systemName: "mappin.and.ellipse")
                                 .font(.title2)
                                 .frame(width: 40, alignment: .center)
-                                .foregroundColor(.primary)
+                                .foregroundColor(Color.gray)
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Explore Hotspots")
                                     .font(.headline)
@@ -62,7 +62,7 @@ struct WelcomeView: View {
                             Image(systemName: "person.3.fill")
                                 .font(.title2)
                                 .frame(width: 40, alignment: .center)
-                                .foregroundColor(.primary)
+                                .foregroundColor(Color.gray)
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Join Clubs")
                                     .font(.headline)
@@ -82,7 +82,7 @@ struct WelcomeView: View {
                             .foregroundColor(.white)
                             .padding()
                             .frame(maxWidth: .infinity)
-                            .background(Color(red: 255/255.0, green: 50/255.0, blue: 61/255.0))
+                            .background(Color(red: 55/255.0, green: 119/255.0, blue: 1.0))
                             .cornerRadius(10)
                     }
                 }

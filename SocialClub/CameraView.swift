@@ -1,106 +1,111 @@
 import SwiftUI
 import UIKit
 import AVFoundation
+import FirebaseStorage
+import AudioToolbox
 
 struct CameraView: View {
     @Environment(\.dismiss) var dismiss
     @StateObject var camera = CameraModel()
     @State private var showExploreView: Bool = false
-    @State private var showPhotoConfirmation: Bool = false
+    @State private var showPhotoConfirmationView: Bool = false
     
     var body: some View {
-        ZStack {
-            // Camera preview
-            CameraPreview(camera: camera)
-                .ignoresSafeArea(.all, edges: .all)
-            
-            // Shutter button at the bottom (recording)
-            VStack {
-                Spacer()
-                HStack {
+        NavigationStack {
+            ZStack {
+                // Camera preview
+                CameraPreview(camera: camera)
+                    .ignoresSafeArea(.all, edges: .all)
+                
+                // Shutter button at the bottom (recording)
+                VStack {
                     Spacer()
-                    Circle()
-                        .stroke(Color.white, lineWidth: 4)
-                        .frame(width: 90, height: 90)
-                        .onTapGesture {
-                            camera.takePhoto()
-                        }
-                    Spacer()
-                }
-                .padding(.bottom, 40)
-            }
-            
-            // Dismiss button at the top left
-            VStack {
-                HStack {
-                    Button(action: {
-                        showExploreView = true
-                    }) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 24))
-                            .foregroundColor(.white)
-                            .padding()
-                            .background(Circle().fill(Color.black.opacity(0.5)))
+                    HStack {
+                        Spacer()
+                        Circle()
+                            .stroke(Color.white, lineWidth: 4)
+                            .frame(width: 100, height: 100)
+                            .contentShape(Circle())
+                            .zIndex(1)
+                            .onTapGesture {
+                                print("Shutter button tapped")
+                                camera.takePhoto()
+                            }
+                        Spacer()
                     }
-                    .padding(.leading, 12)
-                    Spacer()
+                    .padding(.bottom, 40)
                 }
-                Spacer()
-            }
-            .padding(.top, 4)
-            
-            // Flash and Camera Flip buttons container
-            VStack {
-                HStack {
-                    Spacer()
-                    VStack(spacing: 12) {
+                
+                // Dismiss button at the top left
+                VStack {
+                    HStack {
                         Button(action: {
-                            camera.toggleFlash()
+                            showExploreView = true
                         }) {
-                            Image(systemName: camera.flashEnabled ? "bolt" : "bolt.slash")
-                                .font(.system(size: 24))
+                            Image(systemName: "xmark")
+                                .font(.system(size: 22))
                                 .foregroundColor(.white)
                                 .padding(8)
+                                .background(Circle().fill(Color.black.opacity(0.5)))
                         }
-                        Divider()
-                            .background(Color.white)
-                        Button(action: {
-                            camera.flipCamera()
-                        }) {
-                            Image(systemName: "arrow.triangle.2.circlepath.camera")
-                                .font(.system(size: 24))
-                                .foregroundColor(.white)
-                                .padding(4)
-                        }
+                        .padding(.leading, 16)
+                        Spacer()
                     }
-                    .padding(8)
-                    .frame(width: 50)
-                    .background(Color.black.opacity(0.5))
-                    .cornerRadius(10)
-                    .padding(.trailing, 4)
+                    Spacer()
                 }
-                Spacer()
+                .padding(.top, 4)
+                
+                // Flash and Camera Flip buttons container
+                VStack {
+                    HStack {
+                        Spacer()
+                        VStack(spacing: 12) {
+                            Button(action: {
+                                camera.toggleFlash()
+                            }) {
+                                Image(systemName: camera.flashEnabled ? "bolt" : "bolt.slash")
+                                    .font(.system(size: 22))
+                                    .foregroundColor(.white)
+                                    .padding(8)
+                            }
+                            Divider()
+                                .background(Color.white)
+                            Button(action: {
+                                camera.flipCamera()
+                            }) {
+                                Image(systemName: "arrow.triangle.2.circlepath.camera")
+                                    .font(.system(size: 22))
+                                    .foregroundColor(.white)
+                                    .padding(5)
+                            }
+                        }
+                        .padding(8)
+                        .frame(width: 45)
+                        .background(Color.black.opacity(0.5))
+                        .cornerRadius(10)
+                    }
+                    Spacer()
+                }
+                .padding(.top, 4)
+                .padding(.horizontal, 16)
             }
-            .padding(.top, 8)
-            .offset(x: -10, y: 0)
-        }
-        .onChange(of: camera.capturedMediaURL) { newValue in
-            if newValue != nil {
-                showPhotoConfirmation = true
+            .onAppear {
+                camera.checkPermissions()
+                camera.configure()
             }
-        }
-        .fullScreenCover(isPresented: $showPhotoConfirmation, onDismiss: {
-            // Optionally, reset the captured media after dismissal
-            camera.capturedMediaURL = nil
-        }) {
-            PhotoConfirmationView(mediaURL: camera.capturedMediaURL!)
-        }
-        .onAppear {
-            camera.checkPermissions()
-            camera.configure()
-        }
-        .fullScreenCover(isPresented: $showExploreView) {
-            ExploreView()
+            .onReceive(camera.$capturedImage) { newImage in
+                if newImage != nil {
+                    showPhotoConfirmationView = true
+                }
+            }
+            .fullScreenCover(isPresented: $showExploreView) {
+                ExploreView()
+            }
+            .fullScreenCover(isPresented: $showPhotoConfirmationView) {
+                if let image = camera.capturedImage, let url = camera.mediaURL {
+                    PhotoConfirmationView(image: image, mediaURL: url)
+                }
+            }
         }
     }
 }
@@ -123,7 +128,8 @@ class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
     var currentCameraPosition: AVCaptureDevice.Position = .back
     @Published var session = AVCaptureSession()
     @Published var output = AVCapturePhotoOutput()
-    @Published var capturedMediaURL: URL? = nil
+    @Published var capturedImage: UIImage? = nil
+    @Published var mediaURL: URL? = nil
     lazy var previewLayer: AVCaptureVideoPreviewLayer = {
         let layer = AVCaptureVideoPreviewLayer(session: session)
         layer.videoGravity = .resizeAspectFill
@@ -168,14 +174,29 @@ class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
             session.addOutput(output)
         }
         session.commitConfiguration()
+        
+        if let connection = output.connection(with: .video),
+           connection.isVideoMirroringSupported,
+           currentCameraPosition == .front {
+            connection.isVideoMirrored = false
+        }
+        
         session.startRunning()
     }
     
+    func playShutterSound() {
+        AudioServicesPlaySystemSound(1108)
+    }
+    
     func takePhoto() {
-        print("Take photo button pressed")
         let settings = AVCapturePhotoSettings()
-        settings.isHighResolutionPhotoEnabled = true
-        settings.flashMode = flashEnabled ? .on : .off
+        if flashEnabled, output.supportedFlashModes.contains(.on) {
+            settings.flashMode = .on
+        } else {
+            settings.flashMode = .off
+        }
+
+        playShutterSound()
         output.capturePhoto(with: settings, delegate: self)
     }
     
@@ -210,21 +231,31 @@ class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
             print("Error capturing photo: \(error)")
             return
         }
-        print("photoOutput delegate method called")
-        guard let data = photo.fileDataRepresentation() else {
-            print("Failed to get photo data")
-            return
+        guard let data = photo.fileDataRepresentation(), let image = UIImage(data: data) else { return }
+        print("Photo capture delegate called")
+        // Update the capturedImage
+        DispatchQueue.main.async {
+            self.capturedImage = image
         }
-        if let image = UIImage(data: data), let jpegData = image.jpegData(compressionQuality: 1.0) {
-            let fileURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("capturedPhoto.jpg")
-            do {
-                try jpegData.write(to: fileURL)
-                DispatchQueue.main.async {
-                    self.capturedMediaURL = fileURL
+        // Upload to Firebase
+        let storageRef = Storage.storage().reference().child("images/\(UUID().uuidString).jpg")
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else { return }
+        storageRef.putData(imageData, metadata: nil) { metadata, error in
+            if let error = error {
+                print("Failed to upload: \(error)")
+                return
+            }
+            print("Image uploaded successfully!")
+            storageRef.downloadURL { url, error in
+                if let error = error {
+                    print("Failed to get download URL: \(error)")
+                    return
                 }
-                print("Photo captured and saved to \(fileURL)")
-            } catch {
-                print("Error saving photo: \(error)")
+                if let url = url {
+                    DispatchQueue.main.async {
+                        self.mediaURL = url
+                    }
+                }
             }
         }
     }
