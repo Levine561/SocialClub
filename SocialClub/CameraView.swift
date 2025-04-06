@@ -22,18 +22,13 @@ struct CameraView: View {
                     Spacer()
                     HStack {
                         Spacer()
-                        Circle()
-                            .stroke(Color.white, lineWidth: 4)
-                            .frame(width: 100, height: 100)
-                            .contentShape(Circle())
-                            .zIndex(1)
-                            .onTapGesture {
-                                print("Shutter button tapped")
-                                camera.takePhoto()
-                            }
+                        ShutterButton(action: {
+                            print("Shutter button tapped")
+                            camera.takePhoto()
+                        })
                         Spacer()
                     }
-                    .padding(.bottom, 40)
+                    .padding(.bottom, 12)
                 }
                 
                 // Dismiss button at the top left
@@ -258,6 +253,33 @@ class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
                 }
             }
         }
+    }
+}
+
+struct ShutterButton: View {
+    let action: () -> Void
+    @GestureState private var isPressed: Bool = false
+    
+    var body: some View {
+        let pressGesture = LongPressGesture(minimumDuration: 0.01)
+            .updating($isPressed) { currentState, state, _ in
+                state = currentState
+            }
+            .onEnded { _ in
+                action()
+            }
+        
+        return ZStack {
+            Circle()
+                .stroke(Color.white, lineWidth: 4)
+                .frame(width: 100, height: 100)
+            Circle()
+                .fill(Color.white)
+                .frame(width: 80, height: 80)
+                .scaleEffect(isPressed ? 0.9 : 1.0)
+                .animation(.easeInOut(duration: 0.1), value: isPressed)
+        }
+        .gesture(pressGesture)
     }
 }
 
