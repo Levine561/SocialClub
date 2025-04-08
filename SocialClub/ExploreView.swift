@@ -6,6 +6,7 @@ import FirebaseFirestore
 struct Photo: Identifiable {
     var id: String
     var mediaURL: String
+    var userProfileURL: String?  // <-- New property for the user's profile picture URL
     var overlayText: String?
     var coordinate: CLLocationCoordinate2D?
 }
@@ -132,6 +133,7 @@ struct ExploreView: View {
     @State private var showLocationModal: Bool = true
     @State private var showCameraView = false
     @State private var showProfileView: Bool = false
+    @State private var viewedPhotoIDs: Set<String> = []
     @State private var resetCamera: Bool = false
     @State private var userHeading: CLLocationDirection = 0
     @State private var photos: [Photo] = []
@@ -161,11 +163,14 @@ struct ExploreView: View {
             }
             guard let documents = snapshot?.documents else { return }
             var fetchedPhotos: [Photo] = []
+
             for doc in documents {
                 let data = doc.data()
                 let mediaURL = data["mediaURL"] as? String ?? ""
                 let overlayText = data["overlayText"] as? String
+                let userId = data["userId"] as? String ?? ""
                 var coordinate: CLLocationCoordinate2D? = nil
+
                 if let locationString = data["location"] as? String {
                     let parts = locationString.split(separator: ",")
                     if parts.count == 2,
@@ -174,11 +179,22 @@ struct ExploreView: View {
                         coordinate = CLLocationCoordinate2D(latitude: lat, longitude: lon)
                     }
                 }
-                let photo = Photo(id: doc.documentID, mediaURL: mediaURL, overlayText: overlayText, coordinate: coordinate)
-                fetchedPhotos.append(photo)
-            }
-            DispatchQueue.main.async {
-                self.photos = fetchedPhotos
+
+                let basePhoto = Photo(id: doc.documentID, mediaURL: mediaURL, userProfileURL: nil, overlayText: overlayText, coordinate: coordinate)
+
+                // Fetch user info based on userId
+                db.collection("users").document(userId).getDocument { userSnapshot, error in
+                    var updatedPhoto = basePhoto
+                    if let userData = userSnapshot?.data(),
+                       let userProfileURL = userData["profilePictureURL"] as? String {
+                        updatedPhoto.userProfileURL = userProfileURL
+                    }
+
+                    DispatchQueue.main.async {
+                        fetchedPhotos.append(updatedPhoto)
+                        self.photos = fetchedPhotos
+                    }
+                }
             }
         }
     }
@@ -307,7 +323,8 @@ struct ExploreView: View {
                                 title: "Sights",
                                 subtitle: "See what's happening near you",
                                 placeholders: 5,
-                                photos: photos
+                                photos: photos,
+                                viewedPhotoIDs: $viewedPhotoIDs
                             )
 
                             // Hotspots
@@ -352,9 +369,15 @@ struct ExploreView: View {
                     userHeading = newHeading
                 }
                 .onAppear {
+                    if let storedIDs = UserDefaults.standard.array(forKey: "viewedPhotoIDs") as? [String] {
+                        viewedPhotoIDs = Set(storedIDs)
+                    }
                     loadProfileImage()
                     loadPhotos()
                     // Additional onAppear actions if needed
+                }
+                .onChange(of: viewedPhotoIDs) { newValue in
+                    UserDefaults.standard.set(Array(newValue), forKey: "viewedPhotoIDs")
                 }
                 .fullScreenCover(isPresented: $showCameraView) {
                     CameraView()
@@ -381,13 +404,16 @@ struct SectionView: View {
     let subtitle: String
     let placeholders: Int
     var photos: [Photo]? = nil
+    var viewedPhotoIDs: Binding<Set<String>>? = nil
+    @State private var selectedPhoto: Photo? = nil
+    @State private var showSightsView = false
 
     // Dropdown
     @State private var selectedOption = "Hottest"
     let menuOptions = ["Nearest", "For you", "Hottest"]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 4) {
             // Title + Dropdown
             HStack {
                 Text(title)
@@ -425,28 +451,76 @@ struct SectionView: View {
                 HStack(spacing: 8) {
                     if title == "Sights" {
                         // For Sights, always show at least 5 items
-                        let photoCount = photos?.count ?? 0
                         if let photos = photos, !photos.isEmpty {
-                            ForEach(photos) { photo in
-                                AsyncImage(url: URL(string: photo.mediaURL)) { phase in
-                                    if let image = phase.image {
-                                        image.resizable()
-                                            .scaledToFill()
-                                            .frame(width: 120, height: 120 * 16 / 9.0)
-                                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                                    } else if phase.error != nil {
-                                        // Display an error placeholder
-                                        Color.red
-                                            .frame(width: 120, height: 120 * 16 / 9.0)
-                                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                                    } else {
-                                        SkeletonRectangleView(cornerRadius: 6)
-                                            .frame(width: 120, height: 120 * 16 / 9.0)
+                            ForEach(
+                                (viewedPhotoIDs != nil ? photos.sorted {
+                                    let viewed0 = viewedPhotoIDs!.wrappedValue.contains($0.id)
+                                    let viewed1 = viewedPhotoIDs!.wrappedValue.contains($1.id)
+                                    // Place unviewed photos first; if both have same state, maintain current order
+                                    return (!viewed0 && viewed1) || (viewed0 == viewed1)
+                                } : photos),
+                                id: \.id
+                            ) { photo in
+                                Button(action: {
+                                    selectedPhoto = photo
+                                    // Always mark photo as viewed
+                                    viewedPhotoIDs?.wrappedValue.insert(photo.id)
+                                    showSightsView = true
+                                }) {
+                                    ZStack(alignment: .top) {
+                                        AsyncImage(url: URL(string: photo.mediaURL)) { phase in
+                                            if let image = phase.image {
+                                                image.resizable()
+                                                    .scaledToFill()
+                                                    .frame(width: 120, height: 120 * 16 / 9.0)
+                                                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                                            } else if phase.error != nil {
+                                                Color.red
+                                                    .frame(width: 120, height: 120 * 16 / 9.0)
+                                                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                                            } else {
+                                                SkeletonRectangleView(cornerRadius: 6)
+                                                    .frame(width: 120, height: 120 * 16 / 9.0)
+                                            }
+                                        }
+                                        AsyncImage(url: URL(string: photo.userProfileURL ?? "")) { phase in
+                                            if let image = phase.image {
+                                                image.resizable()
+                                                    .scaledToFill()
+                                                    .frame(width: 48, height: 48)
+                                                    .clipShape(Circle())
+                                                    .overlay(
+                                                        Circle().stroke(
+                                                            (viewedPhotoIDs?.wrappedValue.contains(photo.id) ?? false) ? LinearGradient(
+                                                                gradient: Gradient(colors: [Color.gray, Color.gray]),
+                                                                startPoint: .topLeading,
+                                                                endPoint: .bottomTrailing
+                                                            ) : LinearGradient(
+                                                                gradient: Gradient(colors: [Color.red, Color.yellow]),
+                                                                startPoint: .topLeading,
+                                                                endPoint: .bottomTrailing
+                                                            ),
+                                                            lineWidth: 2
+                                                        )
+                                                    )
+                                            } else if phase.error != nil {
+                                                Image(systemName: "person.crop.circle.fill")
+                                                    .resizable()
+                                                    .scaledToFill()
+                                                    .frame(width: 48, height: 48)
+                                                    .foregroundColor(.gray)
+                                            } else {
+                                                SkeletonCircleView()
+                                                    .frame(width: 48, height: 48)
+                                            }
+                                        }
+                                        .padding(.top, 8)
                                     }
                                 }
+                                .buttonStyle(PlainButtonStyle())
                             }
                         }
-                        let placeholdersToShow = max(0, 5 - (photoCount))
+                        let placeholdersToShow = max(0, 5 - (photos?.count ?? 0))
                         ForEach(0..<placeholdersToShow, id: \.self) { _ in
                             SkeletonRectangleView(cornerRadius: 6)
                                 .frame(width: 120, height: 120 * 16 / 9.0)
@@ -477,6 +551,13 @@ struct SectionView: View {
                                     .frame(width: 140, height: 140)
                             }
                         }
+                    }
+                }
+                .fullScreenCover(isPresented: $showSightsView) {
+                    if let selectedPhoto = selectedPhoto {
+                        SightsView(photo: selectedPhoto)
+                    } else {
+                        EmptyView()
                     }
                 }
                 .padding(.vertical, 4)

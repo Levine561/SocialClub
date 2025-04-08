@@ -2,6 +2,7 @@ import SwiftUI
 import AVKit
 import FirebaseStorage
 import FirebaseFirestore
+import FirebaseAuth
 import CoreLocation
 
 struct PhotoConfirmationView: View {
@@ -139,8 +140,18 @@ struct PhotoConfirmationView: View {
 
                                     // Create metadata and attach location if available
                                     let newMetadata = StorageMetadata()
+                                    newMetadata.customMetadata = [:]
                                     if let location = photoLocation {
-                                        newMetadata.customMetadata = ["location": "\(location.latitude),\(location.longitude)"]
+                                        newMetadata.customMetadata?["location"] = "\(location.latitude),\(location.longitude)"
+                                    }
+                                    
+                                    // Get the current user and attach user info to Storage metadata
+                                    if let currentUser = Auth.auth().currentUser {
+                                        newMetadata.customMetadata?["userId"] = currentUser.uid
+                                        if let displayName = currentUser.displayName {
+                                            newMetadata.customMetadata?["displayName"] = displayName
+                                        }
+                                        // Add more fields from currentUser if needed
                                     }
 
                                     storageRef.putData(imageData, metadata: newMetadata) { metadata, error in
@@ -161,6 +172,15 @@ struct PhotoConfirmationView: View {
                                             }
                                             if !overlayText.isEmpty {
                                                 data["overlayText"] = overlayText
+                                            }
+                                            
+                                            // Attach current user info to Firestore document
+                                            if let currentUser = Auth.auth().currentUser {
+                                                data["userId"] = currentUser.uid
+                                                if let displayName = currentUser.displayName {
+                                                    data["displayName"] = displayName
+                                                }
+                                                // You can add additional fields (e.g., email) as needed
                                             }
 
                                             db.collection("photos").document(docID).setData(data) { error in

@@ -2,6 +2,8 @@ import SwiftUI
 import UIKit
 import AVFoundation
 import FirebaseStorage
+import FirebaseAuth
+import FirebaseFirestore
 import AudioToolbox
 import CoreLocation
 
@@ -227,6 +229,46 @@ class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate, CL
         print("Camera flipped to \(currentCameraPosition == .back ? "Back" : "Front")")
     }
     
+    func fetchUserMetadata(completion: @escaping (StorageMetadata?) -> Void) {
+        guard let userId = Auth.auth().currentUser?.uid else {
+            print("No authenticated user.")
+            completion(nil)
+            return
+        }
+        
+        let db = Firestore.firestore()
+        db.collection("users").document(userId).getDocument { snapshot, error in
+            if let error = error {
+                print("Error fetching user info: \(error.localizedDescription)")
+                completion(nil)
+                return
+            }
+            guard let data = snapshot?.data() else {
+                print("User document not found or no data.")
+                completion(nil)
+                return
+            }
+            
+            let name = data["name"] as? String ?? ""
+            let username = data["username"] as? String ?? ""
+            let profilePictureURL = data["profilePictureURL"] as? String ?? ""
+            
+            let metadataObj = StorageMetadata()
+            var customMetadata: [String: String] = [:]
+            
+            if let location = self.photoLocation {
+                customMetadata["location"] = "\(location.latitude),\(location.longitude)"
+            }
+            
+            customMetadata["name"] = name
+            customMetadata["username"] = username
+            customMetadata["profilePictureURL"] = profilePictureURL
+            
+            metadataObj.customMetadata = customMetadata
+            completion(metadataObj)
+        }
+    }
+    
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         if let location = locations.last {
             DispatchQueue.main.async {
@@ -244,33 +286,36 @@ class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate, CL
             print("Error capturing photo: \(error)")
             return
         }
+        
         guard let data = photo.fileDataRepresentation(), let image = UIImage(data: data) else { return }
         print("Photo capture delegate called")
-        // Update the capturedImage
+        
         DispatchQueue.main.async {
             self.capturedImage = image
         }
-        // Upload to Firebase
+        
         let storageRef = Storage.storage().reference().child("images/\(UUID().uuidString).jpg")
         guard let imageData = image.jpegData(compressionQuality: 0.8) else { return }
-        let metadataObj = StorageMetadata()
-        if let location = self.photoLocation {
-            metadataObj.customMetadata = ["location": "\(location.latitude),\(location.longitude)"]
-        }
-        storageRef.putData(imageData, metadata: metadataObj) { metadata, error in
-            if let error = error {
-                print("Failed to upload: \(error)")
-                return
-            }
-            print("Image uploaded successfully!")
-            storageRef.downloadURL { url, error in
+        
+        self.fetchUserMetadata { metadataObj in
+            let finalMetadata = metadataObj ?? StorageMetadata()
+            
+            storageRef.putData(imageData, metadata: finalMetadata) { metadata, error in
                 if let error = error {
-                    print("Failed to get download URL: \(error)")
+                    print("Failed to upload: \(error)")
                     return
                 }
-                if let url = url {
-                    DispatchQueue.main.async {
-                        self.mediaURL = url
+                print("Image uploaded successfully!")
+                
+                storageRef.downloadURL { url, error in
+                    if let error = error {
+                        print("Failed to get download URL: \(error)")
+                        return
+                    }
+                    if let url = url {
+                        DispatchQueue.main.async {
+                            self.mediaURL = url
+                        }
                     }
                 }
             }
