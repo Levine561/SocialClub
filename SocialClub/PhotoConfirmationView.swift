@@ -1,15 +1,19 @@
 import SwiftUI
 import AVKit
 import FirebaseStorage
+import FirebaseFirestore
+import CoreLocation
 
 struct PhotoConfirmationView: View {
     let backgroundF3F2F8 = Color(red: 243/255, green: 242/255, blue: 248/255)
 
     let image: UIImage
     let mediaURL: URL
+    let photoLocation: CLLocationCoordinate2D?
     
     @Environment(\.dismiss) var dismiss
     @State private var navigateToCameraView: Bool = false
+    @State private var navigateToExploreView: Bool = false
     @State private var shareComment: String = ""
     @State private var isImageLoaded = false
     @State private var overlayText: String = ""
@@ -45,16 +49,27 @@ struct PhotoConfirmationView: View {
                         }
                         .overlay(
                             Button(action: {
-                                // Delete from Firebase
-                                let ref = Storage.storage().reference(forURL: mediaURL.absoluteString)
-                                ref.delete { error in
+                                // Delete from Firebase Storage
+                                let storageRef = Storage.storage().reference(forURL: mediaURL.absoluteString)
+                                storageRef.delete { error in
                                     if let error = error {
-                                        print("Failed to delete photo: \(error)")
+                                        print("Failed to delete photo from Storage: \(error)")
                                     } else {
-                                        print("Photo successfully deleted from Firebase.")
+                                        print("Photo successfully deleted from Firebase Storage.")
                                     }
-                                    // Navigate back
-                                    navigateToCameraView = true
+                                    
+                                    // Delete Firestore document that contains location and other metadata
+                                    let db = Firestore.firestore()
+                                    let docID = mediaURL.lastPathComponent
+                                    db.collection("photos").document(docID).delete { error in
+                                        if let error = error {
+                                            print("Failed to delete Firestore document: \(error)")
+                                        } else {
+                                            print("Firestore document successfully deleted.")
+                                        }
+                                        // Navigate back
+                                        navigateToCameraView = true
+                                    }
                                 }
                             }) {
                                 Image(systemName: "xmark")
@@ -114,17 +129,62 @@ struct PhotoConfirmationView: View {
                             VStack {
                                 Spacer()
                                 Button(action: {
-                                    // Placeholder for post action
-                                    print("Post tapped")
-                                }) {
+                                    // Create a composite image with the overlay text (if overlayText is empty, this returns the original image)
+                                    let compositeImage = compositeImageWithText(image: image, text: overlayText)
+                                    guard let imageData = compositeImage.jpegData(compressionQuality: 0.8) else {
+                                        print("Failed to convert composite image to JPEG data.")
+                                        return
+                                    }
+                                    let storageRef = Storage.storage().reference(forURL: mediaURL.absoluteString)
+
+                                    // Create metadata and attach location if available
+                                    let newMetadata = StorageMetadata()
+                                    if let location = photoLocation {
+                                        newMetadata.customMetadata = ["location": "\(location.latitude),\(location.longitude)"]
+                                    }
+
+                                    storageRef.putData(imageData, metadata: newMetadata) { metadata, error in
+                                        if let error = error {
+                                            print("Failed to update image with text: \(error)")
+                                        } else {
+                                            print("Image updated with text successfully.")
+
+                                            // Write metadata to Firestore
+                                            let db = Firestore.firestore()
+                                            let docID = mediaURL.lastPathComponent
+                                            var data: [String: Any] = [
+                                                "mediaURL": mediaURL.absoluteString,
+                                                "timestamp": FieldValue.serverTimestamp()
+                                            ]
+                                            if let location = photoLocation {
+                                                data["location"] = "\(location.latitude),\(location.longitude)"
+                                            }
+                                            if !overlayText.isEmpty {
+                                                data["overlayText"] = overlayText
+                                            }
+
+                                            db.collection("photos").document(docID).setData(data) { error in
+                                                if let error = error {
+                                                    print("Error writing Firestore document: \(error)")
+                                                } else {
+                                                    print("Firestore document successfully written.")
+                                                }
+                                                DispatchQueue.main.async {
+                                                    navigateToExploreView = true
+                                                }
+                                            }
+                                        }
+                                    }
+                                }, label: {
                                     Text("Post")
+                                        .fontWeight(.semibold)
                                         .foregroundColor(.white)
                                         .padding(16)
                                         .frame(maxWidth: 150)
                                         .background(
                                             Capsule().fill(Color(red: 55/255, green: 119/255, blue: 255/255))
                                         )
-                                }
+                                })
                                 .padding(.bottom, 56)
                             }, alignment: .bottom
                         )
@@ -170,6 +230,9 @@ struct PhotoConfirmationView: View {
         .fullScreenCover(isPresented: $navigateToCameraView) {
             CameraView()
         }
+        .fullScreenCover(isPresented: $navigateToExploreView) {
+            ExploreView()
+        }
     }
     
     var isImage: Bool {
@@ -179,7 +242,51 @@ struct PhotoConfirmationView: View {
 }
 
 #Preview {
-    PhotoConfirmationView(image: UIImage(contentsOfFile: "path/to/image.jpg")!, mediaURL: URL(string: "https://example.com/image.jpg")!)
+    PhotoConfirmationView(image: UIImage(contentsOfFile: "path/to/image.jpg")!, mediaURL: URL(string: "https://example.com/image.jpg")!, photoLocation: nil)
+}
+
+private func compositeImageWithText(image: UIImage, text: String) -> UIImage {
+    let renderer = UIGraphicsImageRenderer(size: image.size)
+    let compositeImage = renderer.image { context in
+        // Draw the original image
+        image.draw(in: CGRect(origin: .zero, size: image.size))
+        
+        // Only add text container if there is text
+        guard !text.isEmpty else { return }
+        
+        // Define text attributes
+        let font = UIFont.boldSystemFont(ofSize: 40)
+        let textAttributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: UIColor.white
+        ]
+        
+        // Calculate the size of the text
+        let textSize = (text as NSString).size(withAttributes: textAttributes)
+        
+        // Define padding for vertical space in the container
+        let verticalPadding: CGFloat = 16
+        // Container spans the full width of the image and its height is text height plus vertical padding
+        let containerHeight = textSize.height + verticalPadding
+        let containerRect = CGRect(x: 0,
+                                   y: (image.size.height - containerHeight) / 2,
+                                   width: image.size.width,
+                                   height: containerHeight)
+        
+        // Draw the text container with a semi-transparent dark background (alpha 0.5) and no corner radius
+        UIColor(white: 0.1, alpha: 0.5).setFill()
+        UIRectFill(containerRect)
+        
+        // Position the text inside the container (centered)
+        let textRect = CGRect(x: (containerRect.width - textSize.width) / 2,
+                              y: containerRect.origin.y + (containerRect.height - textSize.height) / 2,
+                              width: textSize.width,
+                              height: textSize.height)
+        
+        // Draw the text onto the image
+        (text as NSString).draw(in: textRect, withAttributes: textAttributes)
+    }
+    return compositeImage
 }
 
 extension View {

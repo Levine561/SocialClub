@@ -3,6 +3,16 @@ import MapKit
 import FirebaseAuth
 import FirebaseFirestore
 
+struct Photo: Identifiable {
+    var id: String
+    var mediaURL: String
+    var overlayText: String?
+    var coordinate: CLLocationCoordinate2D?
+}
+class PhotoAnnotation: MKPointAnnotation {
+    var photo: Photo?
+}
+
 extension Color {
     static var adaptiveBackground: Color {
         Color(UIColor { traitCollection in
@@ -124,6 +134,7 @@ struct ExploreView: View {
     @State private var showProfileView: Bool = false
     @State private var resetCamera: Bool = false
     @State private var userHeading: CLLocationDirection = 0
+    @State private var photos: [Photo] = []
 
     private func loadProfileImage() {
         guard let currentUser = Auth.auth().currentUser else { return }
@@ -137,6 +148,37 @@ struct ExploreView: View {
                         }
                     }
                 }.resume()
+            }
+        }
+    }
+
+    private func loadPhotos() {
+        let db = Firestore.firestore()
+        db.collection("photos").getDocuments { snapshot, error in
+            if let error = error {
+                print("Error fetching photos: \(error)")
+                return
+            }
+            guard let documents = snapshot?.documents else { return }
+            var fetchedPhotos: [Photo] = []
+            for doc in documents {
+                let data = doc.data()
+                let mediaURL = data["mediaURL"] as? String ?? ""
+                let overlayText = data["overlayText"] as? String
+                var coordinate: CLLocationCoordinate2D? = nil
+                if let locationString = data["location"] as? String {
+                    let parts = locationString.split(separator: ",")
+                    if parts.count == 2,
+                       let lat = Double(parts[0]),
+                       let lon = Double(parts[1]) {
+                        coordinate = CLLocationCoordinate2D(latitude: lat, longitude: lon)
+                    }
+                }
+                let photo = Photo(id: doc.documentID, mediaURL: mediaURL, overlayText: overlayText, coordinate: coordinate)
+                fetchedPhotos.append(photo)
+            }
+            DispatchQueue.main.async {
+                self.photos = fetchedPhotos
             }
         }
     }
@@ -157,7 +199,7 @@ struct ExploreView: View {
                 // Once location is available, update region and show the map and UI
                 ZStack(alignment: .top) {
                     // 3D Map (simplified)
-                    ThreeDMapView(region: $region, resetCamera: $resetCamera, userHeading: userHeading)
+                    ThreeDMapView(region: $region, resetCamera: $resetCamera, userHeading: userHeading, photos: photos)
                         .edgesIgnoringSafeArea(.all)
                     
                     // Blur overlay at top for improved readability of status bar content
@@ -264,7 +306,8 @@ struct ExploreView: View {
                             SectionView(
                                 title: "Sights",
                                 subtitle: "See what's happening near you",
-                                placeholders: 5
+                                placeholders: 5,
+                                photos: photos
                             )
 
                             // Hotspots
@@ -310,6 +353,7 @@ struct ExploreView: View {
                 }
                 .onAppear {
                     loadProfileImage()
+                    loadPhotos()
                     // Additional onAppear actions if needed
                 }
                 .fullScreenCover(isPresented: $showCameraView) {
@@ -336,6 +380,7 @@ struct SectionView: View {
     let title: String
     let subtitle: String
     let placeholders: Int
+    var photos: [Photo]? = nil
 
     // Dropdown
     @State private var selectedOption = "Hottest"
@@ -375,14 +420,63 @@ struct SectionView: View {
                 .font(.subheadline)
                 .foregroundColor(.secondary)
 
-            // Horizontal scroll of placeholder images
+            // Horizontal scroll of images or placeholders
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    ForEach(0..<placeholders, id: \.self) { _ in
-                        // Blank image placeholder
-                        SkeletonRectangleView(cornerRadius: 6)
-                            .frame(width: title == "Sights" ? 120 : 140,
-                                   height: title == "Sights" ? 120 * 16 / 9.0 : 140)
+                    if title == "Sights" {
+                        // For Sights, always show at least 5 items
+                        let photoCount = photos?.count ?? 0
+                        if let photos = photos, !photos.isEmpty {
+                            ForEach(photos) { photo in
+                                AsyncImage(url: URL(string: photo.mediaURL)) { phase in
+                                    if let image = phase.image {
+                                        image.resizable()
+                                            .scaledToFill()
+                                            .frame(width: 120, height: 120 * 16 / 9.0)
+                                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                                    } else if phase.error != nil {
+                                        // Display an error placeholder
+                                        Color.red
+                                            .frame(width: 120, height: 120 * 16 / 9.0)
+                                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                                    } else {
+                                        SkeletonRectangleView(cornerRadius: 6)
+                                            .frame(width: 120, height: 120 * 16 / 9.0)
+                                    }
+                                }
+                            }
+                        }
+                        let placeholdersToShow = max(0, 5 - (photoCount))
+                        ForEach(0..<placeholdersToShow, id: \.self) { _ in
+                            SkeletonRectangleView(cornerRadius: 6)
+                                .frame(width: 120, height: 120 * 16 / 9.0)
+                        }
+                    } else {
+                        // For other sections, use previous logic
+                        if let photos = photos, !photos.isEmpty {
+                            ForEach(photos) { photo in
+                                AsyncImage(url: URL(string: photo.mediaURL)) { phase in
+                                    if let image = phase.image {
+                                        image.resizable()
+                                            .scaledToFill()
+                                            .frame(width: 140, height: 140)
+                                            .clipped()
+                                    } else if phase.error != nil {
+                                        // Display an error placeholder
+                                        Color.red
+                                            .frame(width: 140, height: 140)
+                                    } else {
+                                        SkeletonRectangleView(cornerRadius: 6)
+                                            .frame(width: 140, height: 140)
+                                    }
+                                }
+                            }
+                        } else {
+                            ForEach(0..<placeholders, id: \.self) { _ in
+                                SkeletonRectangleView(cornerRadius: 6)
+                                    .frame(width: 140, height: 140)
+                            }
+                        }
                     }
                 }
                 .padding(.vertical, 4)
@@ -399,8 +493,95 @@ struct ThreeDMapView: UIViewRepresentable {
     @Binding var resetCamera: Bool
     var userHeading: CLLocationDirection
 
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    class Coordinator: NSObject, MKMapViewDelegate {
+    static var imageCache = NSCache<NSString, UIImage>()
+    
+    var parent: ThreeDMapView
+    init(_ parent: ThreeDMapView) {
+        self.parent = parent
+    }
+    
+    func resizeImage(image: UIImage, targetSize: CGSize) -> UIImage {
+        let size = image.size
+        let widthRatio = targetSize.width / size.width
+        let heightRatio = targetSize.height / size.height
+        let scaleFactor = max(widthRatio, heightRatio)
+        let newSize = CGSize(width: size.width * scaleFactor, height: size.height * scaleFactor)
+        let rect = CGRect(x: (targetSize.width - newSize.width) / 2,
+                          y: (targetSize.height - newSize.height) / 2,
+                          width: newSize.width,
+                          height: newSize.height)
+        UIGraphicsBeginImageContextWithOptions(targetSize, false, 0.0)
+        image.draw(in: rect)
+        let newImage = UIGraphicsGetImageFromCurrentImageContext()
+        UIGraphicsEndImageContext()
+        return newImage ?? image
+    }
+
+        func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+            // Use default view for user location
+            if annotation is MKUserLocation {
+                return nil
+            }
+            
+            if let photoAnnotation = annotation as? PhotoAnnotation {
+                let identifier = "PhotoMarker"
+                var annotationView = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
+                if annotationView == nil {
+                    annotationView = MKAnnotationView(annotation: annotation, reuseIdentifier: identifier)
+                } else {
+                    annotationView?.annotation = annotation
+                }
+                // Set up annotation view appearance as a circular image with an outline
+                annotationView?.frame = CGRect(x: 0, y: 0, width: 50, height: 50)
+                annotationView?.layer.cornerRadius = 25
+                annotationView?.layer.borderWidth = 2
+                annotationView?.layer.borderColor = UIColor.white.cgColor
+                annotationView?.clipsToBounds = true
+                annotationView?.contentMode = .scaleAspectFill
+                // Set a placeholder image while loading
+                annotationView?.image = UIImage(systemName: "photo")
+                
+                if let urlString = photoAnnotation.photo?.mediaURL, let url = URL(string: urlString) {
+                    if let cachedImage = Coordinator.imageCache.object(forKey: urlString as NSString) {
+                        annotationView?.image = cachedImage
+                    } else {
+                        // Set placeholder image
+                        annotationView?.image = UIImage(systemName: "photo")
+                        let currentAnnotationView = annotationView
+                        URLSession.shared.dataTask(with: url) { data, response, error in
+                            if let data = data, let image = UIImage(data: data) {
+                                // Resize image to fit within 50x50 bounds
+                                let targetSize = CGSize(width: 50, height: 50)
+                                let resizedImage = self.resizeImage(image: image, targetSize: targetSize)
+                                // Cache the resized image
+                                Coordinator.imageCache.setObject(resizedImage, forKey: urlString as NSString)
+                                DispatchQueue.main.async {
+                                    if let currentPhotoAnnotation = currentAnnotationView?.annotation as? PhotoAnnotation,
+                                       let currentMediaURL = currentPhotoAnnotation.photo?.mediaURL,
+                                       currentMediaURL == urlString {
+                                        currentAnnotationView?.image = resizedImage
+                                        currentAnnotationView?.setNeedsDisplay()
+                                    }
+                                }
+                            }
+                        }.resume()
+                    }
+                }
+                return annotationView
+            }
+            return nil
+        }
+    }
+    var photos: [Photo]  // New property for photo markers
+
     func makeUIView(context: Context) -> MKMapView {
         let mapView = MKMapView(frame: .zero)
+        mapView.delegate = context.coordinator
         mapView.showsCompass = false
         mapView.showsUserLocation = true
         mapView.pointOfInterestFilter = MKPointOfInterestFilter.excludingAll
@@ -419,11 +600,24 @@ struct ThreeDMapView: UIViewRepresentable {
     func updateUIView(_ uiView: MKMapView, context: Context) {
         if resetCamera {
             let computedAltitude = max(500, min(2000, region.span.latitudeDelta * 111000))
-            // Use the current heading or a default value
             let camera = MKMapCamera(lookingAtCenter: region.center, fromDistance: computedAltitude, pitch: 60, heading: userHeading)
             uiView.setCamera(camera, animated: true)
             DispatchQueue.main.async {
                 self.resetCamera = false
+            }
+        }
+        
+        // Remove existing annotations
+        uiView.removeAnnotations(uiView.annotations)
+        
+        // Add custom photo annotations
+        for photo in photos {
+            if let coordinate = photo.coordinate {
+                let annotation = PhotoAnnotation()
+                annotation.coordinate = coordinate
+                annotation.title = photo.overlayText ?? "Photo"
+                annotation.photo = photo
+                uiView.addAnnotation(annotation)
             }
         }
     }

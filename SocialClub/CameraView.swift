@@ -3,6 +3,7 @@ import UIKit
 import AVFoundation
 import FirebaseStorage
 import AudioToolbox
+import CoreLocation
 
 struct CameraView: View {
     @Environment(\.dismiss) var dismiss
@@ -98,7 +99,7 @@ struct CameraView: View {
             }
             .fullScreenCover(isPresented: $showPhotoConfirmationView) {
                 if let image = camera.capturedImage, let url = camera.mediaURL {
-                    PhotoConfirmationView(image: image, mediaURL: url)
+                    PhotoConfirmationView(image: image, mediaURL: url, photoLocation: camera.photoLocation)
                 }
             }
         }
@@ -118,8 +119,10 @@ struct CameraPreview: UIViewRepresentable {
     func updateUIView(_ uiView: UIView, context: Context) {}
 }
 
-class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
+class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate, CLLocationManagerDelegate {
     @Published var flashEnabled: Bool = false
+    private let locationManager = CLLocationManager()
+    @Published var photoLocation: CLLocationCoordinate2D? = nil
     var currentCameraPosition: AVCaptureDevice.Position = .back
     @Published var session = AVCaptureSession()
     @Published var output = AVCapturePhotoOutput()
@@ -133,6 +136,9 @@ class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
     
     override init() {
         super.init()
+        locationManager.delegate = self
+        locationManager.requestWhenInUseAuthorization()
+        locationManager.startUpdatingLocation()
     }
     
     func checkPermissions() {
@@ -221,6 +227,18 @@ class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
         print("Camera flipped to \(currentCameraPosition == .back ? "Back" : "Front")")
     }
     
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        if let location = locations.last {
+            DispatchQueue.main.async {
+                self.photoLocation = location.coordinate
+            }
+        }
+    }
+
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        print("Location update failed: \(error)")
+    }
+    
     func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
         if let error = error {
             print("Error capturing photo: \(error)")
@@ -235,7 +253,11 @@ class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
         // Upload to Firebase
         let storageRef = Storage.storage().reference().child("images/\(UUID().uuidString).jpg")
         guard let imageData = image.jpegData(compressionQuality: 0.8) else { return }
-        storageRef.putData(imageData, metadata: nil) { metadata, error in
+        let metadataObj = StorageMetadata()
+        if let location = self.photoLocation {
+            metadataObj.customMetadata = ["location": "\(location.latitude),\(location.longitude)"]
+        }
+        storageRef.putData(imageData, metadata: metadataObj) { metadata, error in
             if let error = error {
                 print("Failed to upload: \(error)")
                 return
